@@ -49,9 +49,8 @@ SUCCESS_DISPLAY_TIME = 8
 SIMILARITY_THRESHOLD = 0.55
 
 # --- SCREEN CONSTANTS ---
-# Leave room for the Wayfire panel/title bar on the 800x480 touchscreen.
-# A fixed 800x480 managed window was clipped when placed at +10+78.
-KIOSK_FULLSCREEN = os.environ.get('KIOSK_FULLSCREEN') == '1'
+# Launch from the touchscreen terminal. KIOSK_FULLSCREEN=0 is a windowed fallback.
+KIOSK_FULLSCREEN = os.environ.get('KIOSK_FULLSCREEN', '1') != '0'
 SCREEN_W = 800 if KIOSK_FULLSCREEN else 780
 SCREEN_H = 480 if KIOSK_FULLSCREEN else 400
 
@@ -80,16 +79,14 @@ class SmartAttendanceSystem:
         self.root = root
         self.root.title("Smart Attendance Kiosk")
 
-        # --- TOUCHSCREEN WINDOW ---
-        # Launch from the touchscreen terminal. Do not ask Wayfire to select a
-        # fullscreen output by default. Keep a managed window for entry focus
-        # and dialogs, with space for the desktop's panel and window decorations.
+        # Map a small managed window on the launch output before requesting
+        # fullscreen. Keep WM focus/dialog handling and the working touch bindings.
         self.root.configure(bg=GUI_BG)
-        self.root.geometry(f"{SCREEN_W}x{SCREEN_H}")
+        self.root.geometry('780x400')
         self.root.resizable(False, False)
         self.root.update()
         if KIOSK_FULLSCREEN:
-            self.root.attributes("-fullscreen", True)
+            self.root.after(250, lambda: self.root.attributes('-fullscreen', True))
         self.root.attributes('-topmost', True)
         self.root.after(1000, lambda: print(
             f'[DISPLAY] Tk window: {self.root.winfo_geometry()}; '
@@ -383,26 +380,25 @@ class SmartAttendanceSystem:
         self.lbl_video_att = tk.Label(video, bg='black', bd=0)
         self.lbl_video_att.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        self.panel_status = tk.Frame(self.frame_attendance, bg="#101010", padx=20, pady=20)
+        self.panel_status = tk.Frame(self.frame_attendance, bg="#101010", padx=18, pady=12)
         self.panel_status.pack(side="right", fill="both", expand=True)
 
         # Reserve controls before status text is packed. Images/messages cannot
         # overlap the touch target or push it beyond the 800x480 screen.
-        controls = tk.Frame(self.panel_status, bg='#101010', height=54)
-        # Keep STOP near the top so it remains reachable even if a compositor
-        # offsets the 480px window below the panel during placement diagnostics.
-        controls.pack(side='top', fill='x', pady=(0, 6))
+        controls = tk.Frame(self.panel_status, bg='#101010', height=84)
+        controls.pack(side='bottom', fill='x', pady=(6, 0))
         controls.pack_propagate(False)
-        self.btn_stop = tk.Button(controls, text='STOP / MENU', bg='#cc0000', fg='white',
+        self.btn_stop = tk.Button(controls, text='STOP / MENU', bg='#831b1c', fg='white',
                                   font=('Arial', 13, 'bold'), width=15, takefocus=True,
                                   command=self.return_to_menu)
-        self.btn_stop.pack(side='left', fill='y', padx=(0, 10))
+        self.btn_stop.place(x=0, rely=.5, anchor='w', width=180, height=54)
 
-        logo = self.get_logo_image(54, 48, "#101010")
+        logo = self.get_logo_image(84, 84, "#101010")
         if logo:
-            lbl_logo = tk.Label(controls, image=logo, bg="#101010")
+            lbl_logo = tk.Label(controls, image=logo, bg="#101010", bd=0, padx=0, pady=0)
             lbl_logo.image = logo
             lbl_logo.pack(side='right')
+            self.lbl_attendance_logo = lbl_logo
 
         # Clock
         self.lbl_clock = tk.Label(
@@ -420,46 +416,48 @@ class SmartAttendanceSystem:
                  font=("Arial", 12), bg="#101010", fg="#888").pack(anchor="w")
         self.lbl_status_main = tk.Label(
             self.panel_status, text="WAITING...",
-            font=("Arial", 30, "bold"), bg="#101010", fg="white",
+            font=("Arial", 28, "bold"), bg="#101010", fg="white",
             anchor="w", justify="left"
         )
-        self.lbl_status_main.pack(anchor="w", pady=(0, 6), fill="x")
+        self.lbl_status_main.pack(anchor="w", pady=(0, 4), fill="x")
 
         # Current IN/OUT badge
         self.lbl_current_status = tk.Label(
             self.panel_status, text="",
-            font=("Arial", 13, "bold"), bg="#101010", fg="#555",
+            font=("Arial", 12, "bold"), bg="#101010", fg="#555",
             anchor="w"
         )
-        self.lbl_current_status.pack(anchor="w", pady=(0, 6), fill="x")
+        self.lbl_current_status.pack(anchor="w", pady=(0, 4), fill="x")
 
         # Next window info
         self.lbl_next_window = tk.Label(
             self.panel_status, text="",
-            font=("Arial", 12), bg="#101010", fg=GUI_WARN,
-            anchor="w", wraplength=280, justify="left"
+            font=("Arial", 10), bg="#101010", fg=GUI_WARN,
+            anchor="w", wraplength=460, justify="left"
         )
-        self.lbl_next_window.pack(anchor="w", pady=(0, 8), fill="x")
+        self.lbl_next_window.pack(anchor="w", pady=(0, 4), fill="x")
 
-        tk.Frame(self.panel_status, height=2, bg="#333").pack(fill="x", pady=8)
+        tk.Frame(self.panel_status, height=2, bg="#333").pack(fill="x", pady=5)
 
         tk.Label(self.panel_status, text="NAME:",
                  font=("Arial", 12), bg="#101010", fg="#888").pack(anchor="w")
         self.lbl_name_res = tk.Label(
             self.panel_status, text="-",
-            font=("Arial", 22), bg="#101010", fg=GUI_ACCENT,
+            font=("Arial", 20), bg="#101010", fg=GUI_ACCENT,
             anchor="w", justify="left"
         )
-        self.lbl_name_res.pack(anchor="w", pady=(0, 10), fill="x")
+        self.lbl_name_res.pack(anchor="w", pady=(0, 4), fill="x")
 
-        tk.Label(self.panel_status, text="ID:",
-                 font=("Arial", 12), bg="#101010", fg="#888").pack(anchor="w")
+        identity = tk.Frame(self.panel_status, bg='#101010')
+        identity.pack(anchor='w', fill='x')
+        tk.Label(identity, text="ID:",
+                 font=("Arial", 11), bg="#101010", fg="#888").pack(side='left', padx=(0, 8))
         self.lbl_id_res = tk.Label(
-            self.panel_status, text="-",
-            font=("Arial", 22), bg="#101010", fg=GUI_ACCENT,
+            identity, text="-",
+            font=("Arial", 16), bg="#101010", fg=GUI_ACCENT,
             anchor="w", justify="left"
         )
-        self.lbl_id_res.pack(anchor="w", fill="x")
+        self.lbl_id_res.pack(side='left', fill='x', expand=True)
 
     def update_clock(self):
         now = datetime.now().strftime("%d %b %Y  %H:%M:%S")

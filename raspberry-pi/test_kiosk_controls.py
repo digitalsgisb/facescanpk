@@ -26,7 +26,7 @@ class KioskControlTests(unittest.TestCase):
         self.app=namespace['SmartAttendanceSystem']()
         self.app.root=self.root
         self.app.display_width,self.app.display_height=270,480
-        self.app.get_logo_image=lambda *args:tk.PhotoImage(master=self.root,width=54,height=48)
+        self.app.get_logo_image=lambda width,height,*args:tk.PhotoImage(master=self.root,width=width,height=height)
         self.app.update_clock=lambda:None
         self.app.reload_database=lambda:None
         self.app.on_shutdown=lambda:None
@@ -121,7 +121,7 @@ class KioskControlTests(unittest.TestCase):
         self.app.show_frame('ATTENDANCE')
         self.root.update()
         stop = self.app.btn_stop
-        self.assertLess(stop.winfo_rooty() - self.root.winfo_rooty(), 90)
+        self.assertGreater(stop.winfo_rooty() - self.root.winfo_rooty(), 250)
         self.app.show_frame('REGISTER')
         self.root.update()
         for widget in [self.app.entry_id, self.app.entry_name, self.app.btn_capture,
@@ -133,6 +133,19 @@ class KioskControlTests(unittest.TestCase):
             self.assertLessEqual(x + widget.winfo_width(), 780)
             self.assertLessEqual(y + widget.winfo_height(), 400)
             self.assertGreaterEqual(widget.winfo_height(), 20)
+
+    def test_footer_has_larger_logo_and_bottom_aligned_stop(self):
+        self.root.geometry('800x480')
+        self.root.update()
+        stop = self.app.btn_stop
+        logo = self.app.lbl_attendance_logo
+        stop_center = stop.winfo_rooty() + stop.winfo_height() / 2
+        logo_center = logo.winfo_rooty() + logo.winfo_height() / 2
+        self.assertLessEqual(abs(stop_center - logo_center), 1)
+        self.assertEqual(logo.winfo_width(), 84)
+        self.assertEqual(logo.winfo_height(), 84)
+        self.assertGreater(stop.winfo_rooty() - self.root.winfo_rooty(), 350)
+        self.assertLess(stop.winfo_rootx() + stop.winfo_width(), logo.winfo_rootx())
 
 
 if __name__=='__main__':

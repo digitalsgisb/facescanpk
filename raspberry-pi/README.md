@@ -82,7 +82,7 @@ These are excluded from GitHub and the update ZIP. Do not delete the offline out
 
 ### Current setup: launch from the touchscreen terminal
 
-The default kiosk now uses a fixed **780x400** managed window on the **800x480** touchscreen. The margin accommodates the desktop panel and title bar; an 800x480 window at the observed offset (+10,+78) extended below the screen. The camera preview scales to the smaller window. Launch from a terminal on the touchscreen; the app does not request fullscreen or select a monitor by default. Keep the service stopped for this manual workflow.
+The default kiosk uses **800x480 fullscreen** on the touchscreen. Launch from a terminal on the touchscreen: it first maps a small managed window, then requests fullscreen after mapping. STOP / MENU and a larger 84px logo share a reserved bottom footer. Touch handling and camera shutdown cleanup remain enabled. Keep the service stopped for this manual workflow.
 
 ```bash
 sudo systemctl stop attendance-kiosk
@@ -90,7 +90,7 @@ cd /home/wblsugihara
 KIOSK_DEBUG_TOUCH=1 python3 -u face.py
 ```
 
-Use physical touch to test STOP, registration fields, keyboard and Cancel. This mode still needs physical verification; a window size change cannot repair missing input events. The optional `KIOSK_FULLSCREEN=1 python3 face.py` restores the previous 800x480 fullscreen request, including its compositor placement limitations. The older automatic two-screen instructions below are optional and are not part of the current manual touchscreen setup.
+Use physical touch to test STOP, registration fields, keyboard and Cancel. Fullscreen placement still depends on Wayfire and needs physical verification. If it returns to the wrong display, `KIOSK_FULLSCREEN=0 python3 face.py` restores the working 780x400 managed window. The older automatic two-screen instructions below are optional and are not part of the current manual touchscreen setup.
 
 ### Pin the kiosk to DSI-1 under Wayfire
 
@@ -108,7 +108,7 @@ Stop the service before a manual test, then launch `python3 -u face.py` from the
 
 The old `force_kiosk_fullscreen.sh` service helper also moves this window; test manually first to isolate it. To undo the configuration change, restore the timestamped `wayfire.ini.attendance-*.bak` backup created by the setup command.
 
-The Pi's DSI touchscreen is 800×480 at (0,0). The current manual setup uses a 780x400 window launched from its terminal. HDMI browser placement is independent. Final window placement is controlled by the Pi's window manager.
+The Pi's DSI touchscreen is 800×480 at (0,0). Launch the fullscreen kiosk from its terminal. HDMI browser placement is independent. Final window placement is controlled by the Pi's window manager.
 
 Use the already-working Raspberry Pi environment with Tkinter, Picamera2, OpenCV, NumPy, Pillow, InsightFace and ONNX Runtime. Camera and AI run in separate restartable processes. The setup/check tools use Python's standard library. Preserve the existing face model files as well as face enrollments.
 
@@ -116,7 +116,7 @@ The service starts in scanning mode. **STOP / MENU** pauses recognition and retu
 
 ### Touchscreen buttons do not respond
 
-Kiosk buttons handle a press followed by a release inside the button without requiring a preceding mouse-hover event. Disabled buttons and releases outside the button do not invoke the action; mouse and keyboard access remain available. STOP is near the top of the status panel so it stays reachable while diagnosing an offset window.
+Kiosk buttons handle a press followed by a release inside the button without requiring a preceding mouse-hover event. Disabled buttons and releases outside the button do not invoke the action; mouse and keyboard access remain available. STOP and the company logo occupy a reserved bottom footer.
 
 For a manual diagnostic run, keep the service stopped and run `KIOSK_DEBUG_TOUCH=1 python3 -u face.py`. Tap STOP physically. `[TOUCH] press/release` lines report widget class and coordinates without recording entry contents; a successful STOP also logs `[UI] Menu requested`. No `[TOUCH]` lines means Tk received no matching pointer events, so a button callback change alone cannot fix it. Press/release on another widget or unexpected coordinates points to window/input mapping. Window placement and physical input still require verification on the Pi.
 
