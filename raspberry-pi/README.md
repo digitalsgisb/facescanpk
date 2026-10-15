@@ -6,6 +6,8 @@ This folder goes on the **Raspberry Pi**, not the AI PC. It includes `face.py`, 
 
 These steps use your already-working Raspberry Pi camera/face-recognition environment. Keep using the same Python environment or virtual environment as the old kiosk.
 
+For the Ubuntu Docker installation use **port 3800** in the address, for example `http://192.168.1.100:3800`. The native Python service examples below use its default port 8765. Always use the port actually published on the AI PC.
+
 1. **Prepare the PC first.** Follow the [AI PC setup guide](../ai-pc/README.md#step-by-step-first-setup-on-the-ai-pc). Leave its attendance service running and note its LAN IPv4 address. `192.168.1.100` below is only an example; replace it with your PC's real address.
 2. **Download the Pi package.** Download [Smart-Attendance-Pi.zip](https://github.com/digitalsgisb/facescanpk/raw/refs/heads/main/downloads/Smart-Attendance-Pi.zip) onto the Pi and extract it using File Manager.
 3. **Stop the old Python kiosk.** If it was started in a terminal, stop that process normally. If it runs through an existing service/autostart entry, stop that launcher first so it cannot restart during the copy. Do not change unrelated Pi services.

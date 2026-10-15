@@ -5,7 +5,7 @@ services:
     init: true
     user: "${ATTENDANCE_UID:-1000}:${ATTENDANCE_GID:-1000}"
     ports:
-      - "${ATTENDANCE_BIND:-0.0.0.0}:${ATTENDANCE_PORT:-8765}:8765"
+      - "${ATTENDANCE_BIND:-0.0.0.0}:${ATTENDANCE_PORT:-3800}:8765"
     volumes:
       - ./runtime:/app/runtime
       - ./data:/app/data:ro

@@ -76,10 +76,10 @@ The private archive is a snapshot from when it was created. It includes the exis
 cd ~/facescanpk/ai-pc
 sudo docker compose up -d --build
 sudo docker compose ps
-curl --fail http://127.0.0.1:8765/api/health
+curl --fail http://127.0.0.1:3800/api/health
 ```
 
-The first build downloads Node/Python images, builds React and installs Python dependencies inside Docker. You do not need Node.js or the app's Python dependencies installed on the host. Keep port 8765 free of another attendance service. After startup, SSH can be disconnected; Compose uses `restart: unless-stopped`, and the Docker daemon is enabled at boot.
+The first build downloads Node/Python images, builds React and installs Python dependencies inside Docker. You do not need Node.js or the app's Python dependencies installed on the host. Keep port 3800 free of another attendance service. After startup, SSH can be disconnected; Compose uses `restart: unless-stopped`, and the Docker daemon is enabled at boot.
 
 If the container fails to start:
 
@@ -109,7 +109,7 @@ Copy the token shown once privately. It is a kiosk token, not your administrator
 
 ## 8. Connect the Pi
 
-The service address is **`http://AI_PC_IP:8765`**, where `AI_PC_IP` is the reachable LAN address used for SSH. Do not enter `0.0.0.0`, `127.0.0.1` or a Docker bridge address on the Pi.
+The service address is **`http://AI_PC_IP:3800`**, where `AI_PC_IP` is the reachable LAN address used for SSH. Do not enter `0.0.0.0`, `127.0.0.1` or a Docker bridge address on the Pi.
 
 In a **Pi terminal**, inside `/home/wblsugihara` using the kiosk's existing Python environment:
 
@@ -124,7 +124,7 @@ At the setup prompts, enter the AI PC service address and the kiosk token from s
 
 ## 9. Show the HDMI board
 
-On the Pi browser, open `http://AI_PC_IP:8765`, sign in with the admin password, move the browser to HDMI, select Live board → TV fullscreen. Keep Python on DSI-1 (800×480); the HDMI board is 1366×768 at (800,0).
+On the Pi browser, open `http://AI_PC_IP:3800`, sign in with the admin password, move the browser to HDMI, select Live board → TV fullscreen. Keep Python on DSI-1 (800×480); the HDMI board is 1366×768 at (800,0).
 
 ## 10. Update later
 
@@ -142,6 +142,27 @@ This preserves the bind-mounted `runtime/` directory and `.env`. Never delete `r
 
 ## HTTP / company HTTPS
 
-The supplied Compose file serves HTTP on port 8765 for a reachable company network. For your existing HTTPS setup, place it behind the company's trusted reverse proxy, configure its upstream to this service and use the HTTPS address on both Pi and browser. Optionally set `ATTENDANCE_BIND=127.0.0.1` in `.env` when the reverse proxy runs on this host, then recreate the container. Keep certificate keys outside GitHub. Only expose the direct LAN port where it is actually needed for this company network.
+The supplied Compose file serves HTTP on port 3800 for a reachable company network. For your existing HTTPS setup, place it behind the company's trusted reverse proxy, configure its upstream to this service and use the HTTPS address on both Pi and browser. Optionally set `ATTENDANCE_BIND=127.0.0.1` in `.env` when the reverse proxy runs on this host, then recreate the container. Keep certificate keys outside GitHub. Only expose the direct LAN port where it is actually needed for this company network.
 
 Local Docker image execution could not be checked in the Windows development workspace; verify the image build and health check on the Ubuntu host. The terminal administration and attendance logic have automated tests.
+
+## Existing Cloudflare Tunnel
+
+Add a published application hostname such as `attendance.sugidigital.org` to your existing tunnel. Set service type HTTP and the service address to `http://localhost:3800` if the connector runs directly on this AI PC or uses Docker host networking. A connector in a separate Docker bridge network needs a reachable host address instead, such as `http://AI_PC_IP:3800`. Leave the public hostname's path field blank. Keep existing routes for other apps unchanged.
+
+Use `https://attendance.sugidigital.org` for the browser once the route exists. The Pi Python kiosk can continue using `http://AI_PC_IP:3800` on the company LAN so scans do not depend on the internet/tunnel. If Cloudflare Access protects the browser hostname, the current kiosk does not send Access service-token headers; keep its direct LAN API connection.
+
+### Changing an existing Docker installation from the old port
+
+Run on the Ubuntu AI PC:
+
+```bash
+cd ~/facescanpk/ai-pc
+git pull --ff-only
+sed -i '/^ATTENDANCE_PORT=/d' .env
+printf '\nATTENDANCE_PORT=3800\n' >> .env
+sudo docker compose up -d --build
+curl --fail http://127.0.0.1:3800/api/health
+```
+
+This changes the host-side published port, preserving the UID/GID entries and bind-mounted runtime data. The Python API and its health check still use port 8765 inside the container. Update the tunnel's service URL and the Pi's `kiosk.env` connection with the new external port. The public HTTPS hostname itself does not need a port suffix.
