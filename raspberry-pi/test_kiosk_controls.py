@@ -20,8 +20,9 @@ class KioskControlTests(unittest.TestCase):
         names={'setup_menu','setup_register','setup_attendance','build_keyboard','_set_active','_active',
                '_kb_normalize','_kb_insert','_kb_backspace','_kb_clear','return_to_menu','show_frame'}
         cls.body=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in names]
-        namespace={'tk':tk,'TouchKeyboard':TouchKeyboard,'GUI_BG':'#000','GUI_PANEL':'#1e1e1e',
-                   'GUI_ACCENT':'#0f0','GUI_WARN':'#fc0'}
+        namespace={'tk':tk,'TouchKeyboard':TouchKeyboard,'GUI_BG':'#faf7f5','GUI_PANEL':'#faf7f5',
+                   'GUI_ACCENT':'#177245','GUI_WARN':'#9a5a12', 'GUI_INK':'#302428',
+                   'GUI_MUTED':'#7f6c70', 'GUI_BRAND':'#781b28', 'GUI_BORDER':'#dfc9cc'}
         exec(compile(ast.Module(body=[cls],type_ignores=[]),'face.py','exec'),namespace)
         self.app=namespace['SmartAttendanceSystem']()
         self.app.root=self.root

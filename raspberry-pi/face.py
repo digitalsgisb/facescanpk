@@ -60,15 +60,19 @@ CAM_HEIGHT = 360
 CAM_FPS = 15
 
 # --- COLORS (RGB - frames are RGB after channel swap) ---
-GUI_BG     = "#000000"
-GUI_PANEL  = "#1e1e1e"
-GUI_ACCENT = "#00ff00"
-GUI_WARN   = "#ffcc00"
-GUI_ERR    = "#ff0000"
-GUI_TEAL   = "#00bcd4"
+GUI_BG     = "#faf7f5"
+GUI_PANEL  = "#faf7f5"
+GUI_ACCENT = "#177245"
+GUI_WARN   = "#9a5a12"
+GUI_ERR    = "#781b28"
+GUI_TEAL   = "#781b28"
+GUI_INK    = "#302428"
+GUI_MUTED  = "#7f6c70"
+GUI_BRAND  = "#781b28"
+GUI_BORDER = "#dfc9cc"
 CV_GREEN  = (0, 255, 0)       # RGB Green
 CV_YELLOW = (255, 255, 0)     # RGB Yellow
-CV_RED    = (255, 0, 0)       # RGB Red
+CV_RED    = (120, 27, 40)     # Sugihara dark maroon (RGB)
 CV_GREY   = (100, 100, 100)
 
 if not os.path.exists(DB_PATH):
@@ -208,7 +212,7 @@ class SmartAttendanceSystem:
         pending = getattr(self, 'pending_count', 0)
         health = f'{network} · queued: {pending} · camera: {self.camera_state} · AI: {self.ai_state}'
         if hasattr(self, 'lbl_health'):
-            self.lbl_health.config(text=health, fg='#a8bd91' if network == 'Online' else GUI_WARN)
+            self.lbl_health.config(text=health, fg=GUI_ACCENT if network == 'Online' else GUI_WARN)
         if self._threads_running:
             self.root.after(1000, self.health_loop)
 
@@ -327,25 +331,31 @@ class SmartAttendanceSystem:
         video.pack_propagate(False)
         self.lbl_video_reg = tk.Label(video, bg='black', bd=0)
         self.lbl_video_reg.place(relx=0, rely=0, relwidth=1, relheight=1)
+        tk.Frame(video, bg=GUI_BRAND, height=4).place(x=0, y=0, relwidth=1)
 
-        panel = tk.Frame(self.frame_register, bg=GUI_PANEL, padx=10, pady=4)
+        panel = tk.Frame(self.frame_register, bg=GUI_PANEL, padx=14, pady=8)
         panel.pack(side="right", fill="both", expand=True)
         panel.columnconfigure(0, weight=1)
         panel.rowconfigure(5, weight=1)
 
-        tk.Label(panel, text="NEW REGISTRATION",
-                 font=("Arial", 16, "bold"), bg=GUI_PANEL, fg="white").grid(row=0, column=0, sticky='ew', pady=(0, 4))
+        tk.Label(panel, text="Register employee",
+                 font=("Arial", 18, "bold"), bg=GUI_PANEL, fg=GUI_INK,
+                 anchor='w').grid(row=0, column=0, sticky='ew', pady=(0, 6))
 
         # USER ID (tap to select, use on-screen keyboard below)
-        tk.Label(panel, text="USER ID", font=("Arial", 10), bg=GUI_PANEL, fg="#aaa").grid(row=1, column=0, sticky='w')
-        self.entry_id = tk.Entry(panel, width=1, font=("Arial", 14), bg="#333", fg="white", insertbackground="white")
+        tk.Label(panel, text="Employee ID", font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).grid(row=1, column=0, sticky='w')
+        self.entry_id = tk.Entry(panel, width=1, font=("Arial", 14), bg="white", fg=GUI_INK,
+                                insertbackground=GUI_BRAND, relief='flat', bd=3,
+                                highlightthickness=1, highlightbackground=GUI_BORDER, highlightcolor=GUI_BRAND)
         self.entry_id.grid(row=2, column=0, sticky='ew', pady=(0, 4))
         self.entry_id.bind("<Button-1>", lambda e: self._set_active(self.entry_id))
         self.entry_id.bind("<FocusIn>",  lambda e: self._set_active(self.entry_id))
 
         # FULL NAME
-        tk.Label(panel, text="FULL NAME", font=("Arial", 10), bg=GUI_PANEL, fg="#aaa").grid(row=3, column=0, sticky='w')
-        self.entry_name = tk.Entry(panel, width=1, font=("Arial", 14), bg="#333", fg="white", insertbackground="white")
+        tk.Label(panel, text="Full name", font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).grid(row=3, column=0, sticky='w')
+        self.entry_name = tk.Entry(panel, width=1, font=("Arial", 14), bg="white", fg=GUI_INK,
+                                  insertbackground=GUI_BRAND, relief='flat', bd=3,
+                                  highlightthickness=1, highlightbackground=GUI_BORDER, highlightcolor=GUI_BRAND)
         self.entry_name.grid(row=4, column=0, sticky='ew', pady=(0, 3))
         self.entry_name.bind("<Button-1>", lambda e: self._set_active(self.entry_name))
         self.entry_name.bind("<FocusIn>",  lambda e: self._set_active(self.entry_name))
@@ -358,12 +368,14 @@ class SmartAttendanceSystem:
         btn_row.grid(row=6, column=0, sticky='ew', pady=(3, 2))
         self.btn_capture = tk.Button(
             btn_row, text="WAITING FOR FACE...",
-            font=("Arial", 13, "bold"), bg="#444", fg="#888",
+            font=("Arial", 12, "bold"), bg="#e8dfe0", fg="#857377", disabledforeground='#857377',
+            activebackground='#952c3a', activeforeground='white', relief='flat', bd=0,
             state="disabled", height=2, command=self.save_face_data
         )
         self.btn_capture.pack(side="left", fill="x", expand=True, padx=(0, 4))
-        tk.Button(btn_row, text="CANCEL", font=("Arial", 12, "bold"),
-                  bg="#cc0000", fg="white", height=2, width=8,
+        tk.Button(btn_row, text="Cancel", font=("Arial", 12, "bold"),
+                  bg="#eee5e4", fg=GUI_BRAND, height=2, width=8,
+                  activebackground='#e6d5d5', activeforeground=GUI_BRAND, relief='flat', bd=0,
                   command=lambda: self.show_frame("MENU")).pack(side="right", fill="y")
 
     # ================= ON-SCREEN KEYBOARD =================
@@ -411,23 +423,25 @@ class SmartAttendanceSystem:
         video.pack_propagate(False)
         self.lbl_video_att = tk.Label(video, bg='black', bd=0)
         self.lbl_video_att.place(relx=0, rely=0, relwidth=1, relheight=1)
+        tk.Frame(video, bg=GUI_BRAND, height=4).place(x=0, y=0, relwidth=1)
 
-        self.panel_status = tk.Frame(self.frame_attendance, bg="#101010", padx=18, pady=12)
+        self.panel_status = tk.Frame(self.frame_attendance, bg=GUI_PANEL, padx=18, pady=12)
         self.panel_status.pack(side="right", fill="both", expand=True)
 
         # Reserve controls before status text is packed. Images/messages cannot
         # overlap the touch target or push it beyond the 800x480 screen.
-        controls = tk.Frame(self.panel_status, bg='#101010', height=84)
+        controls = tk.Frame(self.panel_status, bg=GUI_PANEL, height=84)
         controls.pack(side='bottom', fill='x', pady=(6, 0))
         controls.pack_propagate(False)
-        self.btn_stop = tk.Button(controls, text='STOP / MENU', bg='#831b1c', fg='white',
+        self.btn_stop = tk.Button(controls, text='STOP / MENU', bg=GUI_BRAND, fg='white',
+                                  activebackground='#952c3a', activeforeground='white', relief='flat', bd=0,
                                   font=('Arial', 13, 'bold'), width=15, takefocus=True,
                                   command=self.return_to_menu)
         self.btn_stop.place(x=0, rely=.5, anchor='w', width=180, height=54)
 
-        logo = self.get_logo_image(84, 84, "#101010")
+        logo = self.get_logo_image(84, 84, GUI_PANEL)
         if logo:
-            lbl_logo = tk.Label(controls, image=logo, bg="#101010", bd=0, padx=0, pady=0)
+            lbl_logo = tk.Label(controls, image=logo, bg=GUI_PANEL, bd=0, padx=0, pady=0)
             lbl_logo.image = logo
             lbl_logo.pack(side='right')
             self.lbl_attendance_logo = lbl_logo
@@ -435,20 +449,20 @@ class SmartAttendanceSystem:
         # Clock
         self.lbl_clock = tk.Label(
             self.panel_status, text="",
-            font=("Arial", 11), bg="#101010", fg="#555"
+            font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED
         )
         self.lbl_clock.pack(anchor="e")
         self.lbl_health = tk.Label(self.panel_status, text='Starting camera and AI…',
-                                  font=('Arial', 8), bg='#101010', fg=GUI_WARN, wraplength=440)
+                                  font=('Arial', 8), bg=GUI_PANEL, fg=GUI_WARN, wraplength=440)
         self.lbl_health.pack(anchor='e')
         self.update_clock()
 
         # Main status
-        tk.Label(self.panel_status, text="STATUS:",
-                 font=("Arial", 12), bg="#101010", fg="#888").pack(anchor="w")
+        tk.Label(self.panel_status, text="Live attendance",
+                 font=("Arial", 12, 'bold'), bg=GUI_PANEL, fg=GUI_BRAND).pack(anchor="w", pady=(8, 0))
         self.lbl_status_main = tk.Label(
             self.panel_status, text="WAITING...",
-            font=("Arial", 28, "bold"), bg="#101010", fg="white",
+            font=("Arial", 28, "bold"), bg=GUI_PANEL, fg=GUI_BRAND,
             anchor="w", justify="left"
         )
         self.lbl_status_main.pack(anchor="w", pady=(0, 4), fill="x")
@@ -456,7 +470,7 @@ class SmartAttendanceSystem:
         # Current IN/OUT badge
         self.lbl_current_status = tk.Label(
             self.panel_status, text="",
-            font=("Arial", 12, "bold"), bg="#101010", fg="#555",
+            font=("Arial", 12, "bold"), bg=GUI_PANEL, fg=GUI_MUTED,
             anchor="w"
         )
         self.lbl_current_status.pack(anchor="w", pady=(0, 4), fill="x")
@@ -464,29 +478,29 @@ class SmartAttendanceSystem:
         # Next window info
         self.lbl_next_window = tk.Label(
             self.panel_status, text="",
-            font=("Arial", 10), bg="#101010", fg=GUI_WARN,
+            font=("Arial", 10), bg=GUI_PANEL, fg=GUI_WARN,
             anchor="w", wraplength=460, justify="left"
         )
         self.lbl_next_window.pack(anchor="w", pady=(0, 4), fill="x")
 
-        tk.Frame(self.panel_status, height=2, bg="#333").pack(fill="x", pady=5)
+        tk.Frame(self.panel_status, height=1, bg=GUI_BORDER).pack(fill="x", pady=5)
 
-        tk.Label(self.panel_status, text="NAME:",
-                 font=("Arial", 12), bg="#101010", fg="#888").pack(anchor="w")
+        tk.Label(self.panel_status, text="Employee",
+                 font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).pack(anchor="w")
         self.lbl_name_res = tk.Label(
             self.panel_status, text="-",
-            font=("Arial", 20), bg="#101010", fg=GUI_ACCENT,
+            font=("Arial", 20, 'bold'), bg=GUI_PANEL, fg=GUI_INK,
             anchor="w", justify="left"
         )
         self.lbl_name_res.pack(anchor="w", pady=(0, 4), fill="x")
 
-        identity = tk.Frame(self.panel_status, bg='#101010')
+        identity = tk.Frame(self.panel_status, bg=GUI_PANEL)
         identity.pack(anchor='w', fill='x')
         tk.Label(identity, text="ID:",
-                 font=("Arial", 11), bg="#101010", fg="#888").pack(side='left', padx=(0, 8))
+                 font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).pack(side='left', padx=(0, 8))
         self.lbl_id_res = tk.Label(
             identity, text="-",
-            font=("Arial", 16), bg="#101010", fg=GUI_ACCENT,
+            font=("Arial", 14), bg=GUI_PANEL, fg=GUI_INK,
             anchor="w", justify="left"
         )
         self.lbl_id_res.pack(side='left', fill='x', expand=True)
@@ -665,7 +679,7 @@ class SmartAttendanceSystem:
                     self.lbl_video_att.image = img
             else:
                 label = self.lbl_video_reg if self.mode == 'REGISTER' else self.lbl_video_att
-                label.configure(image='', text='CAMERA RESTARTING…', fg=GUI_WARN, font=('Arial', 12))
+                label.configure(image='', text='CAMERA RESTARTING…', fg='#f2c67b', font=('Arial', 12))
                 label.image = None
 
         self.root.after(30, self.update_display)   # display decoupled from AI
@@ -690,13 +704,13 @@ class SmartAttendanceSystem:
             box = faces[0].bbox.astype(int)
             self.reg_overlays = [dict(box=box, color=CV_GREEN,
                                       label="FACE DETECTED", tcolor=(255, 255, 255))]
-            self.ui(lambda: self.btn_capture.config(bg=GUI_ACCENT, fg="black",
+            self.ui(lambda: self.btn_capture.config(bg=GUI_BRAND, fg="white",
                                                     state="normal", text="SAVE USER"))
         else:
             self.reg_face_detected = False
             self.reg_face_embedding = None
             self.reg_overlays = []
-            self.ui(lambda: self.btn_capture.config(bg="#444", fg="#888",
+            self.ui(lambda: self.btn_capture.config(bg="#e8dfe0", fg="#857377",
                                                     state="disabled", text="LOOK AT CAMERA"))
 
     # ================= ATTENDANCE LOGIC (runs in inference thread) =================
@@ -712,11 +726,11 @@ class SmartAttendanceSystem:
                 self.latched_uid = None
             if time.time() - self.last_success_time > SUCCESS_DISPLAY_TIME:
                 def waiting():
-                    self.lbl_status_main.config(text='SCANNING...' if not faces else 'ONE PERSON AT A TIME', fg='white')
-                    self.lbl_current_status.config(text='', fg='#555')
+                    self.lbl_status_main.config(text='SCANNING...' if not faces else 'ONE PERSON AT A TIME', fg=GUI_BRAND)
+                    self.lbl_current_status.config(text='', fg=GUI_MUTED)
                     self.lbl_next_window.config(text='', fg=GUI_WARN)
-                    self.lbl_name_res.config(text='-', fg=GUI_ACCENT)
-                    self.lbl_id_res.config(text='-', fg=GUI_ACCENT)
+                    self.lbl_name_res.config(text='-', fg=GUI_INK)
+                    self.lbl_id_res.config(text='-', fg=GUI_INK)
                 self.ui(waiting)
             return
         self.face_absent_since = None
@@ -800,11 +814,11 @@ class SmartAttendanceSystem:
 
         if not success_screen_active and not found_someone:
             def _idle():
-                self.lbl_status_main.config(text="SCANNING...", fg="white")
-                self.lbl_current_status.config(text="", fg="#555")
+                self.lbl_status_main.config(text="SCANNING...", fg=GUI_BRAND)
+                self.lbl_current_status.config(text="", fg=GUI_MUTED)
                 self.lbl_next_window.config(text="", fg=GUI_WARN)
-                self.lbl_name_res.config(text="-", fg=GUI_ACCENT)
-                self.lbl_id_res.config(text="-", fg=GUI_ACCENT)
+                self.lbl_name_res.config(text="-", fg=GUI_INK)
+                self.lbl_id_res.config(text="-", fg=GUI_INK)
             self.ui(_idle)
 
     def trigger_success(self, uid, name):
@@ -843,11 +857,11 @@ class SmartAttendanceSystem:
         self.frame_register.pack_forget()
         self.frame_attendance.pack_forget()
 
-        self.lbl_status_main.config(text="WAITING...", fg="white")
-        self.lbl_current_status.config(text="", fg="#555")
+        self.lbl_status_main.config(text="WAITING...", fg=GUI_BRAND)
+        self.lbl_current_status.config(text="", fg=GUI_MUTED)
         self.lbl_next_window.config(text="", fg=GUI_WARN)
-        self.lbl_name_res.config(text="-", fg=GUI_ACCENT)
-        self.lbl_id_res.config(text="-",   fg=GUI_ACCENT)
+        self.lbl_name_res.config(text="-", fg=GUI_INK)
+        self.lbl_id_res.config(text="-",   fg=GUI_INK)
         self.last_success_time = 0
         self.att_overlays = []
         self.reg_overlays = []

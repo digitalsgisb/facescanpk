@@ -16,7 +16,8 @@ class RegistrationLayoutTests(unittest.TestCase):
         cls = next(node for node in source.body if isinstance(node,ast.ClassDef) and node.name=='SmartAttendanceSystem')
         methods = {'setup_register','build_keyboard','_set_active','_active','_kb_normalize','_kb_insert','_kb_backspace','_kb_clear'}
         cls.body = [node for node in cls.body if isinstance(node,ast.FunctionDef) and node.name in methods]
-        namespace = {'tk':tk, 'TouchKeyboard':TouchKeyboard, 'GUI_BG':'#000', 'GUI_PANEL':'#1e1e1e'}
+        namespace = {'tk':tk, 'TouchKeyboard':TouchKeyboard, 'GUI_BG':'#faf7f5', 'GUI_PANEL':'#faf7f5',
+                     'GUI_INK':'#302428', 'GUI_MUTED':'#7f6c70', 'GUI_BRAND':'#781b28', 'GUI_BORDER':'#dfc9cc'}
         exec(compile(ast.Module(body=[cls],type_ignores=[]),'face.py','exec'),namespace)
         self.app = namespace['SmartAttendanceSystem']()
         self.app.root = self.root
