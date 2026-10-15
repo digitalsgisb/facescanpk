@@ -119,3 +119,9 @@ The service starts in scanning mode. **STOP / MENU** pauses recognition and retu
 Kiosk buttons handle a press followed by a release inside the button without requiring a preceding mouse-hover event. Disabled buttons and releases outside the button do not invoke the action; mouse and keyboard access remain available. STOP is near the top of the status panel so it stays reachable while diagnosing an offset window.
 
 For a manual diagnostic run, keep the service stopped and run `KIOSK_DEBUG_TOUCH=1 python3 -u face.py`. Tap STOP physically. `[TOUCH] press/release` lines report widget class and coordinates without recording entry contents; a successful STOP also logs `[UI] Menu requested`. No `[TOUCH]` lines means Tk received no matching pointer events, so a button callback change alone cannot fix it. Press/release on another widget or unexpected coordinates points to window/input mapping. Window placement and physical input still require verification on the Pi.
+
+### Camera says Device or resource busy
+
+Stop the service and close all manual kiosk runs before starting one instance. `sudo fuser -v /dev/video* /dev/media*` identifies current holders. Inspect a Python PID with `ps -p PID -o pid,ppid,args`; stop only the identified old attendance worker with `kill -TERM PID`, using `kill -KILL PID` only if that same worker remains stuck. Do not kill all Python processes, PipeWire or WirePlumber indiscriminately.
+
+Ctrl+C, the window close button and SIGTERM now run worker cleanup. The camera gets a stop request and an opportunity to close before forced termination; stuck native workers still have a bounded termination fallback. Camera acquisition failures are reported without repeated constructor tracebacks and retry every 10 seconds. These changes cannot release a camera already held by another running process, and SIGKILL bypasses Python cleanup.

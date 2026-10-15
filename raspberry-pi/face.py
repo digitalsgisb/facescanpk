@@ -14,6 +14,7 @@ import time
 import threading
 import queue
 import multiprocessing as mp
+import signal
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -101,6 +102,8 @@ class SmartAttendanceSystem:
 
         # Native calls run in separate processes and can be restarted on a stall.
         self.process_context = mp.get_context('spawn')
+        self.worker_stop = self.process_context.Event()
+        self.shutdown_requested = threading.Event()
         self.camera_process = None
         self.ai_process = None
         self.camera_state = 'starting'
@@ -155,8 +158,11 @@ class SmartAttendanceSystem:
         self.reload_database()
 
         # --- START BACKGROUND THREADS ---
-        threading.Thread(target=self.capture_loop,   daemon=True).start()
-        threading.Thread(target=self.inference_loop, daemon=True).start()
+        self.capture_thread = threading.Thread(target=self.capture_loop, daemon=True)
+        self.inference_thread = threading.Thread(target=self.inference_loop, daemon=True)
+        self.capture_thread.start()
+        self.inference_thread.start()
+        self.root.protocol('WM_DELETE_WINDOW', self.on_shutdown)
 
         # --- START GUI LOOPS (main thread) ---
         self.show_frame("ATTENDANCE")
@@ -472,26 +478,44 @@ class SmartAttendanceSystem:
             widget.icursor(insert_cursor)
 
     def stop_process(self, process):
-        if process and process.is_alive():
-            process.terminate()
-            process.join(timeout=2)
+        if process and process.pid is not None:
+            # Allow a worker signalled during shutdown to close Picamera2 first.
+            process.join(timeout=1)
             if process.is_alive():
-                process.kill()
-                process.join(timeout=1)
+                process.terminate()
+                process.join(timeout=2)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=1)
 
     def on_shutdown(self):
+        if getattr(self, '_shutting_down', False):
+            return
+        self._shutting_down = True
         self._threads_running = False
+        self.shutdown_requested.set()
+        self.worker_stop.set()
+        # Supervisors own the process handles. Let their finally blocks stop and
+        # reap workers before a forced fallback; never race two join/terminate calls.
+        for thread in (self.capture_thread, self.inference_thread):
+            thread.join(timeout=5)
+        for thread, process in ((self.capture_thread, self.camera_process),
+                                (self.inference_thread, self.ai_process)):
+            if thread.is_alive():
+                print('[SHUTDOWN] Supervisor still stopping; terminating its worker.', flush=True)
+                self.stop_process(process)
         if self.transport:
             self.transport.close()
-        self.stop_process(self.camera_process)
-        self.stop_process(self.ai_process)
-        self.root.destroy()
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
 
     def capture_loop(self):
         while self._threads_running:
             output = self.process_context.Queue(maxsize=2)
             self.camera_state = 'recovering'
-            process = self.process_context.Process(target=camera_worker, args=(output, CAM_WIDTH, CAM_HEIGHT, CAM_FPS), daemon=True)
+            process = self.process_context.Process(target=camera_worker, args=(output, CAM_WIDTH, CAM_HEIGHT, CAM_FPS, self.worker_stop), daemon=True)
             self.camera_process = process
             process.start()
             last_frame = time.monotonic()
@@ -500,7 +524,8 @@ class SmartAttendanceSystem:
                     try:
                         kind, captured_at, frame = output.get(timeout=1)
                         if kind == 'error':
-                            print('[CAMERA]', frame)
+                            print('[CAMERA]', frame, flush=True)
+                            self.camera_state = 'busy' if 'busy' in str(frame).lower() else 'failed'
                             break
                         with self.frame_lock:
                             self.latest_frame = frame
@@ -514,19 +539,20 @@ class SmartAttendanceSystem:
                             self.camera_state = 'stalled'
                             break
             finally:
-                self.camera_state = 'recovering'
+                if self.camera_state not in ('busy', 'failed'):
+                    self.camera_state = 'recovering'
                 self.stop_process(process)
                 output.cancel_join_thread()
                 output.close()
                 with self.frame_lock:
                     self.latest_frame = None
-            time.sleep(1)
+            self.shutdown_requested.wait(10 if self.camera_state in ('busy', 'failed') else 1)
 
     def inference_loop(self):
         while self._threads_running:
             incoming = self.process_context.Queue(maxsize=1)
             output = self.process_context.Queue(maxsize=2)
-            process = self.process_context.Process(target=inference_worker, args=(incoming, output), daemon=True)
+            process = self.process_context.Process(target=inference_worker, args=(incoming, output, self.worker_stop), daemon=True)
             self.ai_process = process
             self.ai_state = 'loading'
             process.start()
@@ -584,7 +610,7 @@ class SmartAttendanceSystem:
                 for channel in (incoming, output):
                     channel.cancel_join_thread()
                     channel.close()
-            time.sleep(2)
+            self.shutdown_requested.wait(2)
 
     # ================= DISPLAY LOOP (main thread) =================
     def update_display(self):
@@ -877,6 +903,23 @@ class SmartAttendanceSystem:
 
 if __name__ == "__main__":
     mp.freeze_support()
-    root = tk.Tk()
-    app = SmartAttendanceSystem(root)
-    root.mainloop()
+    def request_exit(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, request_exit)
+    app = None
+    try:
+        root = tk.Tk()
+        app = SmartAttendanceSystem(root)
+        root.mainloop()
+    except KeyboardInterrupt:
+        print('[SHUTDOWN] Stopping kiosk and camera/AI workers.', flush=True)
+    finally:
+        if app is not None:
+            app.on_shutdown()
+        # Also clean workers if initialization was interrupted before app existed.
+        for child in mp.active_children():
+            child.terminate()
+            child.join(timeout=2)
+            if child.is_alive():
+                child.kill()
+                child.join(timeout=1)
