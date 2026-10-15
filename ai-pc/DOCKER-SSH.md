@@ -7,17 +7,18 @@ Run the commands in this guide on the **Ubuntu AI PC through SSH**, unless expli
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
-cd ~
-git clone https://github.com/digitalsgisb/facescanpk.git
-cd ~/facescanpk/ai-pc
+cd /srv/apps
+git clone https://github.com/digitalsgisb/facescanpk.git facescan_pk
+cd /srv/apps/facescan_pk/ai-pc
 ```
 
-If you already cloned this repository on the AI PC, use the existing checkout instead:
+The AI PC uses `/srv/apps/facescan_pk` (with an underscore), not `/srv/apps/facescan`. For a new clone, your SSH user needs write access to `/srv/apps`. If this folder already exists, use the existing checkout instead:
 
 ```bash
-cd ~/facescanpk
-git pull --ff-only
-cd ai-pc
+cd /srv/apps/facescan_pk
+git pull --ff-only origin main
+if [ -f ai-pc/compose.yaml ]; then cd ai-pc; fi
+test -f compose.yaml
 ```
 
 ## 2. Install/check Docker
@@ -30,7 +31,7 @@ This keeps an existing Docker + Compose installation. On a new Ubuntu machine it
 
 ## 3. Prepare persistent storage
 
-From `~/facescanpk/ai-pc`:
+From `/srv/apps/facescan_pk/ai-pc`:
 
 ```bash
 mkdir -p runtime
@@ -59,7 +60,7 @@ scp "C:\Users\haffizol\Desktop\Project\Smart Attendance\packages\Smart-Attendanc
 Back in the **AI PC SSH terminal**, for a new destination with no existing attendance database:
 
 ```bash
-cd ~/facescanpk/ai-pc
+cd /srv/apps/facescan_pk/ai-pc
 sudo apt-get install -y unzip
 unzip ~/attendance-private.zip -d ~/attendance-private
 cp -a ~/attendance-private/ai-pc/runtime/. ./runtime/
@@ -73,7 +74,7 @@ The private archive is a snapshot from when it was created. It includes the exis
 ## 5. Build and start the container
 
 ```bash
-cd ~/facescanpk/ai-pc
+cd /srv/apps/facescan_pk/ai-pc
 sudo docker compose up -d --build
 sudo docker compose ps
 curl --fail http://127.0.0.1:3800/api/health
@@ -133,7 +134,9 @@ Run on the **Ubuntu AI PC through SSH** in your existing checkout. This block st
 ```bash
 (
 set -e
-cd ~/facescanpk/ai-pc
+cd /srv/apps/facescan_pk
+if [ -f ai-pc/compose.yaml ]; then cd ai-pc; fi
+test -f compose.yaml
 sudo docker compose exec attendance python manage.py backup --output "runtime/backups/pre-update-$(date +%Y%m%d-%H%M%S).zip"
 git status --short
 git pull --ff-only origin main
@@ -143,9 +146,9 @@ curl --fail http://127.0.0.1:3800/api/health
 )
 ```
 
-This preserves the bind-mounted `runtime/` directory and `.env`. Never delete `runtime/` to fix a failed build. If Git reports local source changes, preserve/resolve them first. A plain Docker restart does not rebuild changed React code; use the build command above.
+The directory check accepts `compose.yaml` directly inside `/srv/apps/facescan_pk` or under its `ai-pc/` subfolder. Run subsequent Compose commands from that same directory. This preserves the bind-mounted `runtime/` directory and `.env`. Never delete `runtime/` to fix a failed build. If Git reports local source changes, preserve/resolve them first. A plain Docker restart does not rebuild changed React code; use the build command above.
 
-If the health check fails while the container is starting, inspect `sudo docker compose logs --tail=100 attendance` from `~/facescanpk/ai-pc` and retry the health check after startup. Use your configured host port if it differs from 3800. Refresh the Pi's HDMI browser after the update. Update the Pi separately using its [pull/copy/restart commands](../raspberry-pi/README.md#git-pull-update--existing-pi-installation).
+If the health check fails while the container is starting, inspect `sudo docker compose logs --tail=100 attendance` from the Compose directory selected above and retry the health check after startup. Use your configured host port if it differs from 3800. Refresh the Pi's HDMI browser after the update. Update the Pi separately using its [pull/copy/restart commands](../raspberry-pi/README.md#git-pull-update--existing-pi-installation).
 
 To upload source changes to GitHub from a development checkout, follow the [Git push commands](../README.md#push-code-changes-to-github). Updating the running AI PC normally only needs the pull/rebuild block above.
 
@@ -166,7 +169,7 @@ Use `https://attendance.sugidigital.org` for the browser once the route exists. 
 Run on the Ubuntu AI PC:
 
 ```bash
-cd ~/facescanpk/ai-pc
+cd /srv/apps/facescan_pk/ai-pc
 git pull --ff-only
 sed -i '/^ATTENDANCE_PORT=/d' .env
 printf '\nATTENDANCE_PORT=3800\n' >> .env

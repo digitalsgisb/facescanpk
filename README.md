@@ -4,18 +4,18 @@ Two device packages, one attendance system. The Raspberry Pi handles the camera,
 
 ## Pull the latest update
 
-Update the **AI PC first**, then the Pi. These commands assume you already cloned the repository into `~/facescanpk`. Run each command only after the previous one succeeds. Preserve local changes if Git reports a conflict.
+Update the **AI PC first**, then the Pi. The AI PC checkout is `/srv/apps/facescan_pk`; the Pi examples use `~/facescanpk`. Run each command only after the previous one succeeds. Preserve local changes if Git reports a conflict.
 
 ### AI PC — Ubuntu / SSH / Docker
 
-Run in the AI PC's SSH terminal. Back up the running database, pull the latest code, then rebuild the dashboard and restart the container:
+Run in the AI PC's SSH terminal. The directory check supports the Compose file in either the checkout root or its `ai-pc/` subfolder. Stop if the `test` command fails. Back up the running database, pull the latest code, then rebuild the dashboard and restart the container:
 
 ```bash
-cd ~/facescanpk/ai-pc
+cd /srv/apps/facescan_pk
+if [ -f ai-pc/compose.yaml ]; then cd ai-pc; fi
+test -f compose.yaml
 sudo docker compose exec attendance python manage.py backup --output "runtime/backups/pre-update-$(date +%Y%m%d-%H%M%S).zip"
-cd ..
 git pull --ff-only origin main
-cd ai-pc
 sudo docker compose up -d --build
 sudo docker compose ps
 curl --fail http://127.0.0.1:3800/api/health
