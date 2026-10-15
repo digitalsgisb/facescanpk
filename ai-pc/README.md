@@ -4,6 +4,12 @@ This entire folder goes on the **AI PC**. It includes the React source and build
 
 **Ubuntu AI PC accessible only through SSH?** Use the [Docker + SSH step-by-step guide](DOCKER-SSH.md). It includes Docker installation, private data transfer, terminal-only admin/token setup, persistent storage, updates and the exact Pi service commands. The Windows instructions below are for a non-Docker installation.
 
+## Live attendance notifications
+
+Confirmed kiosk clock-ins and clock-outs show an employee notification at the right of the screen for 3 seconds, including TV fullscreen. A soft bell plays once when each notification appears. Rapid scans queue in order. Opening the dashboard does not replay existing records; duplicate scans and scans awaiting review stay silent.
+
+Bell sound is on by default. Click anywhere in the app once after opening it to let the browser enable audio (entering TV fullscreen also does this). Use **Bell on / Bell off** in the header or live board to mute it; the preference is saved in this browser. The TV/device must also have its audio output enabled.
+
 ## Step-by-step: first setup on the AI PC
 
 1. **Download the correct ZIP.** Download [Smart-Attendance-AI-PC.zip](https://github.com/digitalsgisb/facescanpk/raw/refs/heads/main/downloads/Smart-Attendance-AI-PC.zip). Extract it to a permanent location, for example `C:\SmartAttendance\ai-pc`. The folder containing `server.py` is the app folder. The ready-made ZIP includes `dist/`, so you do not need Node.js just to run it.

@@ -1,0 +1,24 @@
+.attendance-notifications{position:fixed;top:90px;right:24px;width:min(380px,calc(100vw - 32px));z-index:1000;pointer-events:none;font-family:inherit}
+.attendance-notice{--notice-color:#11734c;position:relative;overflow:hidden;border:1px solid #dce6e0;border-radius:18px;background:#fff;color:#26312c;box-shadow:0 18px 60px #172b3430;pointer-events:auto;animation:attendance-arrive .28s ease-out}
+.attendance-notice.is-out{--notice-color:#a22c3e;border-color:#eedde0}
+.attendance-notice-heading{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;color:#66716b}
+.attendance-notice-heading>span{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:750;letter-spacing:1.6px}
+.attendance-notice-heading button{display:flex;align-items:center;justify-content:center;border:0;background:transparent;padding:6px;border-radius:6px;color:#66716b;cursor:pointer}
+.attendance-notice-heading button:hover{background:#f3f5f4}
+.attendance-notice-person{display:flex;align-items:center;gap:13px;padding:16px}
+.attendance-notice-photo{display:flex;align-items:center;justify-content:center;flex:0 0 62px;height:62px;border-radius:16px;background:#f3edef;color:#7e2137;font-size:20px;font-weight:750;overflow:hidden}
+.attendance-notice-photo img{height:100%;width:100%;object-fit:cover}
+.attendance-notice-person>div:last-child{min-width:0}
+.attendance-notice-person strong{display:block;font-size:21px;line-height:1.2;overflow-wrap:anywhere}
+.attendance-notice-person small{display:block;margin-top:6px;font-size:12px;line-height:1.4;color:#66716b;overflow-wrap:anywhere}
+.attendance-notice-result{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 18px;color:var(--notice-color);background:color-mix(in srgb,var(--notice-color) 7%,white)}
+.attendance-notice-result>span{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:750}
+.attendance-notice-result time{font-size:15px;font-weight:650;white-space:nowrap;font-variant-numeric:tabular-nums}
+.attendance-notice-result time small{font-size:9px}
+.attendance-notice-progress{position:absolute;bottom:0;left:0;height:3px;width:100%;background:var(--notice-color);transform-origin:left;animation:attendance-countdown 3s linear forwards}
+.attendance-sound{white-space:nowrap}
+.tv-mode .attendance-notifications{top:100px;right:24px}
+@keyframes attendance-arrive{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}
+@keyframes attendance-countdown{to{transform:scaleX(0)}}
+@media(max-width:650px){.attendance-notifications{top:76px;right:16px}.topbar .attendance-sound span{display:none}.attendance-notice-person strong{font-size:19px}}
+@media(prefers-reduced-motion:reduce){.attendance-notice,.attendance-notice-progress{animation:none}.attendance-notice-progress{display:none}}
