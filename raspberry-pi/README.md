@@ -80,6 +80,22 @@ These are excluded from GitHub and the update ZIP. Do not delete the offline out
 
 ## Screen and dependencies
 
+### Pin the kiosk to DSI-1 under Wayfire
+
+Python's geometry/fullscreen request cannot guarantee an output under Wayfire. Run this once as the desktop user (not with sudo), from the installed kiosk folder:
+
+```bash
+cd /home/wblsugihara
+python3 configure_display.py --output DSI-1
+python3 configure_display.py --output DSI-1 --apply
+```
+
+The first command previews; the second backs up `~/.config/wayfire.ini` and adds a window rule for **Smart Attendance Kiosk**. It preserves touch mappings, other rules and existing plugins. If your desktop uses another config file, pass `--config /actual/path/wayfire.ini`. Unknown plugin lists cause a refusal instead of replacing desktop configuration.
+
+Stop the service before a manual test, then launch `python3 -u face.py` from the Pi desktop terminal. Verify the kiosk stays on DSI-1 even when launched from a terminal on HDMI, and compare a VNC mouse click with a physical STOP tap. A rule being saved is not proof the compositor honored it. Some older Raspberry Pi Wayfire builds have a [reported output-placement bug](https://github.com/WayfireWM/wayfire/issues/2387). If the kiosk still opens on HDMI, report `dpkg-query -W wayfire` and the current `[window-rules]` / `[core]` sections before changing more desktop settings.
+
+The old `force_kiosk_fullscreen.sh` service helper also moves this window; test manually first to isolate it. To undo the configuration change, restore the timestamped `wayfire.ini.attendance-*.bak` backup created by the setup command.
+
 The Pi's DSI touchscreen is 800×480 at (0,0). Python maps there before requesting fullscreen. The HDMI screen at (800,0) displays a browser connected to the PC. Final placement is controlled by the Pi's window manager.
 
 Use the already-working Raspberry Pi environment with Tkinter, Picamera2, OpenCV, NumPy, Pillow, InsightFace and ONNX Runtime. Camera and AI run in separate restartable processes. The setup/check tools use Python's standard library. Preserve the existing face model files as well as face enrollments.

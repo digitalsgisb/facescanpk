@@ -6,7 +6,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 BASE = Path(__file__).resolve().parents[1]
 PI_FILES = ['README.md', 'face.py', 'kiosk_config.py', 'kiosk_keyboard.py', 'kiosk_transport.py',
-            'kiosk_vision.py', 'configure_kiosk.py', 'run_kiosk.sh', 'kiosk.env.example',
+            'kiosk_vision.py', 'configure_kiosk.py', 'configure_display.py', 'test_configure_display.py', 'run_kiosk.sh', 'kiosk.env.example',
             'test_kiosk_transport.py', 'test_kiosk_keyboard.py', 'test_kiosk_controls.py', '1.png']
 PC_FILES = ['README.md', 'server.py', 'requirements.txt', 'start.ps1', 'package.json',
             'package-lock.json', 'index.html', 'vite.config.js', 'test_server.py', 'import_history.py',

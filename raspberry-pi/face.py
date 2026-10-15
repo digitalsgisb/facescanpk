@@ -82,13 +82,16 @@ class SmartAttendanceSystem:
         # (messagebox) open HIDDEN BEHIND the window. Fullscreen keeps the WM in
         # charge while still hiding all decorations.
         # DSI-1 is 800x480 at (0,0); HDMI starts at (800,0).
-        # Screen dimensions can describe the combined desktop. Map onto DSI first
-        # so the window manager chooses the touchscreen for fullscreen.
+        # Geometry alone cannot select a Wayfire output. configure_display.py
+        # installs the native DSI-1 placement rule independently of launch terminal.
         self.root.configure(bg=GUI_BG)
         self.root.geometry(f"{SCREEN_W}x{SCREEN_H}+0+0")
         self.root.update()
         self.root.attributes("-fullscreen", True)
         self.root.attributes('-topmost', True)
+        self.root.after(1000, lambda: print(
+            f'[DISPLAY] Tk window: {self.root.winfo_geometry()}; '
+            'verify DSI-1 placement and touch physically', flush=True))
 
         self.root.configure(bg=GUI_BG)
         self.root.update_idletasks()
