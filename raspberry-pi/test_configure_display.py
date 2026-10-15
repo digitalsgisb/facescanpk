@@ -22,9 +22,14 @@ class DisplayConfigTests(unittest.TestCase):
         self.assertIn('plugins = move resize window-rules', result)
         self.assertIn('xkb_layout = us\n', result)
 
-    def test_refuses_unknown_plugins_and_rule_injection(self):
-        with self.assertRaises(ValueError):
-            pin_window('[input]\n', 'DSI-1')
+    def test_preserves_unknown_inherited_plugins(self):
+        original = '[input]\nxkb_layout = us\n'
+        result = pin_window(original, 'DSI-1')
+        self.assertTrue(result.startswith(original))
+        self.assertNotIn('[core]', result)
+        self.assertIn('start_on_output "DSI-1"', result)
+
+    def test_refuses_rule_injection(self):
         with self.assertRaises(ValueError):
             pin_window('[core]\nplugins = move', 'DSI-1" then maximize')
 

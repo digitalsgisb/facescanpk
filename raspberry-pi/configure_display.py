@@ -22,9 +22,8 @@ def pin_window(text, output, default_text=''):
         defaults = configparser.ConfigParser(interpolation=None)
         defaults.read_string(default_text)
         plugins = defaults.get('core', 'plugins', fallback=None)
-    if plugins is None:
-        raise ValueError('Cannot determine the existing Wayfire plugin list. No settings changed.')
-    if 'window-rules' not in plugins.split():
+    # Unknown inherited defaults are left inherited, never replaced with guesses.
+    if plugins is not None and 'window-rules' not in plugins.split():
         updates['core'] = {'plugins': plugins + ' window-rules'}
     lines = text.splitlines(keepends=True)
     for section, entries in updates.items():
@@ -61,9 +60,17 @@ def main():
     args = parser.parse_args()
     try:
         original = args.config.read_text(encoding='utf-8')
-        defaults = Path('/etc/wayfire/default.ini')
-        updated = pin_window(original, args.output,
-                             defaults.read_text(encoding='utf-8') if defaults.exists() else '')
+        # Raspberry Pi OS uses defaults.ini (plural).
+        defaults = next((path for path in (Path('/etc/wayfire/defaults.ini'),
+                                           Path('/etc/wayfire/default.ini')) if path.exists()), None)
+        default_text = defaults.read_text(encoding='utf-8') if defaults else ''
+        updated = pin_window(original, args.output, default_text)
+        settings = configparser.ConfigParser(interpolation=None)
+        settings.read_string(default_text)
+        settings.read_string(original)
+        if not settings.has_option('core', 'plugins'):
+            print('Plugin defaults unavailable: leaving plugin settings untouched. '
+                  'The rule requires the window-rules plugin to be enabled in Wayfire.')
         if updated == original:
             print('The kiosk output rule is already configured.')
             return

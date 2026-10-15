@@ -90,7 +90,7 @@ python3 configure_display.py --output DSI-1
 python3 configure_display.py --output DSI-1 --apply
 ```
 
-The first command previews; the second backs up `~/.config/wayfire.ini` and adds a window rule for **Smart Attendance Kiosk**. It preserves touch mappings, other rules and existing plugins. If your desktop uses another config file, pass `--config /actual/path/wayfire.ini`. Unknown plugin lists cause a refusal instead of replacing desktop configuration.
+The first command previews; the second backs up `~/.config/wayfire.ini` and adds a window rule for **Smart Attendance Kiosk**. It preserves touch mappings, other rules and existing plugins. It reads Raspberry Pi OS plugin defaults from `/etc/wayfire/defaults.ini`. If your desktop uses another config file, pass `--config /actual/path/wayfire.ini`. Unknown plugin lists remain inherited; a warning explains that the rule requires the `window-rules` plugin.
 
 Stop the service before a manual test, then launch `python3 -u face.py` from the Pi desktop terminal. Verify the kiosk stays on DSI-1 even when launched from a terminal on HDMI, and compare a VNC mouse click with a physical STOP tap. A rule being saved is not proof the compositor honored it. Some older Raspberry Pi Wayfire builds have a [reported output-placement bug](https://github.com/WayfireWM/wayfire/issues/2387). If the kiosk still opens on HDMI, report `dpkg-query -W wayfire` and the current `[window-rules]` / `[core]` sections before changing more desktop settings.
 
