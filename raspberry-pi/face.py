@@ -210,9 +210,17 @@ class SmartAttendanceSystem:
             self.transport.ai_health = self.ai_state
         network = getattr(self, 'network_state', 'Connecting')
         pending = getattr(self, 'pending_count', 0)
-        health = f'{network} · queued: {pending} · camera: {self.camera_state} · AI: {self.ai_state}'
+        parts = [network]
+        if pending:
+            parts.append(f'{pending} pending')
+        if self.camera_state != 'ready':
+            parts.append('Camera connecting')
+        elif self.ai_state != 'ready':
+            parts.append('Starting recognition')
+        health = ' · '.join(parts)
         if hasattr(self, 'lbl_health'):
-            self.lbl_health.config(text=health, fg=GUI_ACCENT if network == 'Online' else GUI_WARN)
+            healthy = network == 'Online' and self.camera_state == 'ready' and self.ai_state == 'ready'
+            self.lbl_health.config(text=health, fg=GUI_ACCENT if healthy else GUI_WARN)
         if self._threads_running:
             self.root.after(1000, self.health_loop)
 
@@ -226,7 +234,7 @@ class SmartAttendanceSystem:
         worker = self.transport.workers().get(str(uid), {}) if self.transport else {}
         schedule = worker.get('effective_schedule')
         if not schedule:
-            return 'Working hours not assigned · scan kept for review'
+            return 'No schedule · review needed'
         return f'{schedule["name"]}: {schedule["start"]} – {schedule["end"]}'
 
     def on_scan_result(self, uid, result):
@@ -234,14 +242,14 @@ class SmartAttendanceSystem:
         name = worker.get('name') or self.pending_names.get(uid, uid)
         action = result['action']
         if action in ('IN', 'OUT'):
-            title = 'CLOCK-IN CONFIRMED' if action == 'IN' else 'CLOCK-OUT CONFIRMED'
+            title = 'Clocked in' if action == 'IN' else 'Clocked out'
             color = GUI_ACCENT
         elif action == 'REVIEW':
-            title, color = 'SAVED · NEEDS REVIEW', GUI_WARN
+            title, color = 'Saved for review', GUI_WARN
         elif action == 'DUPLICATE':
-            title, color = 'ALREADY RECORDED', GUI_WARN
+            title, color = 'Already recorded', GUI_WARN
         else:
-            title, color = 'SCAN NOT ACCEPTED', GUI_ERR
+            title, color = 'Scan not accepted', GUI_ERR
         self.last_success_time = time.time()
         def apply():
             self.lbl_status_main.config(text=title, fg=color, font=('Arial', 23, 'bold'))
@@ -269,58 +277,50 @@ class SmartAttendanceSystem:
         self.frame_menu = tk.Frame(self.root, bg=paper)
 
         brand = tk.Frame(self.frame_menu, bg=maroon)
-        brand.place(relx=0, rely=0, relwidth=.36, relheight=1)
+        brand.place(relx=0, rely=0, relwidth=.34, relheight=1)
         tk.Frame(brand, bg='#a4414b', height=4).pack(side='bottom', fill='x')
-        tk.Label(brand, text='SUGIHARA  /  PORT KLANG', font=('Arial', 9, 'bold'),
-                 bg=maroon, fg='#f3d9dc', anchor='w').place(x=24, y=28)
-        logo = self.get_logo_image(112, 112, maroon)
+        tk.Label(brand, text='PORT KLANG', font=('Arial', 9, 'bold'),
+                 bg=maroon, fg='#f3d9dc', anchor='w').place(x=28, y=32)
+        logo = self.get_logo_image(92, 92, maroon)
         if logo:
             lbl_logo = tk.Label(brand, image=logo, bg=maroon, bd=0)
             lbl_logo.image = logo
-            lbl_logo.place(x=22, rely=.23, anchor='nw')
-        tk.Label(brand, text='Digital\nAttendance', font=('Arial', 24, 'bold'),
-                 justify='left', anchor='w', bg=maroon, fg='white').place(x=24, rely=.52)
-        tk.Label(brand, text='attendance workspace', font=('Arial', 11),
-                 bg=maroon, fg='#edcbd0').place(x=24, rely=.75)
-        tk.Label(brand, text='Face recognition kiosk', font=('Arial', 10),
-                 bg=maroon, fg='#edcbd0').place(x=24, rely=1, y=-30, anchor='sw')
+            lbl_logo.place(x=26, rely=.24, anchor='nw')
+        tk.Label(brand, text='Digital\nAttendance', font=('Arial', 20, 'bold'),
+                 justify='left', anchor='w', bg=maroon, fg='white').place(x=28, rely=.53)
+        tk.Label(brand, text='attendance workspace', font=('Arial', 9),
+                 bg=maroon, fg='#edcbd0').place(x=28, rely=1, y=-36, anchor='sw')
 
         actions = tk.Frame(self.frame_menu, bg=paper)
-        actions.place(relx=.36, rely=0, relwidth=.64, relheight=1)
+        actions.place(relx=.34, rely=0, relwidth=.66, relheight=1)
         content = tk.Frame(actions, bg=paper)
-        content.pack(fill='both', expand=True, padx=30, pady=24)
+        content.pack(fill='both', expand=True, padx=38, pady=28)
         footer = tk.Frame(content, bg=paper)
         footer.pack(side='bottom', fill='x', pady=(12, 0))
-        self.btn_menu_shutdown = tk.Button(footer, text='Close kiosk', command=self.on_shutdown,
+        self.btn_menu_shutdown = tk.Button(footer, text='Close', command=self.on_shutdown,
             font=('Arial', 10), bg='#5a2733', fg=GUI_INK, activebackground='#74404d',
             activeforeground=GUI_INK, relief='flat', bd=0, padx=16, pady=10, cursor='hand2')
         self.btn_menu_shutdown.pack(side='right')
-        tk.Label(content, text='Welcome.', font=('Arial', 27, 'bold'),
-                 bg=paper, fg=ink, anchor='w').pack(fill='x', pady=(14, 6))
-        tk.Label(content, text='Choose an option to get started.', font=('Arial', 11),
-                 bg=paper, fg=GUI_MUTED, anchor='w').pack(fill='x', pady=(0, 22))
+        tk.Label(content, text='Welcome', font=('Arial', 22, 'bold'),
+                 bg=paper, fg=ink, anchor='w').pack(fill='x', pady=(40, 30))
 
         primary = tk.Frame(content, bg=maroon, height=64)
         primary.pack(fill='x')
         primary.pack_propagate(False)
         self.btn_menu_scan = tk.Button(primary, text='Start scanning',
-            command=lambda: self.show_frame('ATTENDANCE'), font=('Arial', 15, 'bold'),
+            command=lambda: self.show_frame('ATTENDANCE'), font=('Arial', 14, 'bold'),
             bg=maroon, fg='white', activebackground='#952c3a', activeforeground='white',
             relief='flat', bd=0, anchor='w', padx=20, cursor='hand2')
         self.btn_menu_scan.pack(fill='both', expand=True)
-        tk.Label(content, text='Clock in or out using the camera.', font=('Arial', 10),
-                 bg=paper, fg=GUI_MUTED, anchor='w').pack(fill='x', pady=(6, 18))
 
         secondary = tk.Frame(content, bg=GUI_BORDER, height=60, padx=1, pady=1)
-        secondary.pack(fill='x')
+        secondary.pack(fill='x', pady=(18, 0))
         secondary.pack_propagate(False)
-        self.btn_menu_register = tk.Button(secondary, text='Register employee',
+        self.btn_menu_register = tk.Button(secondary, text='Register face',
             command=lambda: self.show_frame('REGISTER'), font=('Arial', 14, 'bold'),
             bg='#5a2733', fg=GUI_INK, activebackground='#74404d', activeforeground=GUI_INK,
             relief='flat', bd=0, anchor='w', padx=19, cursor='hand2')
         self.btn_menu_register.pack(fill='both', expand=True)
-        tk.Label(content, text='Set up face recognition for an employee.', font=('Arial', 10),
-                 bg=paper, fg=GUI_MUTED, anchor='w').pack(fill='x', pady=(6, 0))
 
     def setup_register(self):
         self.frame_register = tk.Frame(self.root, bg=GUI_BG)
@@ -338,8 +338,8 @@ class SmartAttendanceSystem:
         panel.columnconfigure(0, weight=1)
         panel.rowconfigure(5, weight=1)
 
-        tk.Label(panel, text="Register employee",
-                 font=("Arial", 18, "bold"), bg=GUI_PANEL, fg=GUI_INK,
+        tk.Label(panel, text="Register face",
+                 font=("Arial", 16, "bold"), bg=GUI_PANEL, fg=GUI_INK,
                  anchor='w').grid(row=0, column=0, sticky='ew', pady=(0, 6))
 
         # USER ID (tap to select, use on-screen keyboard below)
@@ -352,7 +352,7 @@ class SmartAttendanceSystem:
         self.entry_id.bind("<FocusIn>",  lambda e: self._set_active(self.entry_id))
 
         # FULL NAME
-        tk.Label(panel, text="Full name", font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).grid(row=3, column=0, sticky='w')
+        tk.Label(panel, text="Name", font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).grid(row=3, column=0, sticky='w')
         self.entry_name = tk.Entry(panel, width=1, font=("Arial", 14), bg="#5a2733", fg=GUI_INK,
                                   insertbackground=GUI_INK, relief='flat', bd=3,
                                   highlightthickness=1, highlightbackground=GUI_BORDER, highlightcolor=GUI_TEAL)
@@ -367,7 +367,7 @@ class SmartAttendanceSystem:
         btn_row = tk.Frame(panel, bg=GUI_PANEL)
         btn_row.grid(row=6, column=0, sticky='ew', pady=(3, 2))
         self.btn_capture = tk.Button(
-            btn_row, text="WAITING FOR FACE...",
+            btn_row, text="Look at camera",
             font=("Arial", 12, "bold"), bg="#51242f", fg="#bd96a0", disabledforeground='#bd96a0',
             activebackground='#952c3a', activeforeground='white', relief='flat', bd=0,
             state="disabled", height=2, command=self.save_face_data
@@ -433,7 +433,7 @@ class SmartAttendanceSystem:
         controls = tk.Frame(self.panel_status, bg=GUI_PANEL, height=84)
         controls.pack(side='bottom', fill='x', pady=(6, 0))
         controls.pack_propagate(False)
-        self.btn_stop = tk.Button(controls, text='STOP / MENU', bg=GUI_BRAND, fg='white',
+        self.btn_stop = tk.Button(controls, text='Stop / Menu', bg=GUI_BRAND, fg='white',
                                   activebackground='#952c3a', activeforeground='white', relief='flat', bd=0,
                                   font=('Arial', 13, 'bold'), width=15, takefocus=True,
                                   command=self.return_to_menu)
@@ -449,20 +449,20 @@ class SmartAttendanceSystem:
         # Clock
         self.lbl_clock = tk.Label(
             self.panel_status, text="",
-            font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED
+            font=("Arial", 9), bg=GUI_PANEL, fg=GUI_MUTED
         )
         self.lbl_clock.pack(anchor="e")
-        self.lbl_health = tk.Label(self.panel_status, text='Starting camera and AI…',
+        self.lbl_health = tk.Label(self.panel_status, text='Connecting…',
                                   font=('Arial', 8), bg=GUI_PANEL, fg=GUI_WARN, wraplength=440)
         self.lbl_health.pack(anchor='e')
         self.update_clock()
 
         # Main status
-        tk.Label(self.panel_status, text="Live attendance",
-                 font=("Arial", 12, 'bold'), bg=GUI_PANEL, fg=GUI_MUTED).pack(anchor="w", pady=(8, 0))
+        tk.Label(self.panel_status, text="Attendance",
+                 font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).pack(anchor="w", pady=(16, 4))
         self.lbl_status_main = tk.Label(
             self.panel_status, text="WAITING...",
-            font=("Arial", 28, "bold"), bg=GUI_PANEL, fg=GUI_INK,
+            font=("Arial", 24, "bold"), bg=GUI_PANEL, fg=GUI_INK,
             anchor="w", justify="left"
         )
         self.lbl_status_main.pack(anchor="w", pady=(0, 4), fill="x")
@@ -506,7 +506,7 @@ class SmartAttendanceSystem:
         self.lbl_id_res.pack(side='left', fill='x', expand=True)
 
     def update_clock(self):
-        now = datetime.now().strftime("%d %b %Y  %H:%M:%S")
+        now = datetime.now().strftime("%d %b  %H:%M")
         self.lbl_clock.config(text=now)
         self.root.after(1000, self.update_clock)
 
@@ -679,7 +679,7 @@ class SmartAttendanceSystem:
                     self.lbl_video_att.image = img
             else:
                 label = self.lbl_video_reg if self.mode == 'REGISTER' else self.lbl_video_att
-                label.configure(image='', text='CAMERA RESTARTING…', fg='#f2c67b', font=('Arial', 12))
+                label.configure(image='', text='Camera reconnecting…', fg='#f2c67b', font=('Arial', 11))
                 label.image = None
 
         self.root.after(30, self.update_display)   # display decoupled from AI
@@ -705,13 +705,13 @@ class SmartAttendanceSystem:
             self.reg_overlays = [dict(box=box, color=CV_GREEN,
                                       label="FACE DETECTED", tcolor=(255, 255, 255))]
             self.ui(lambda: self.btn_capture.config(bg=GUI_BRAND, fg="white",
-                                                    state="normal", text="SAVE USER"))
+                                                    state="normal", text="Save face"))
         else:
             self.reg_face_detected = False
             self.reg_face_embedding = None
             self.reg_overlays = []
             self.ui(lambda: self.btn_capture.config(bg="#51242f", fg="#bd96a0",
-                                                    state="disabled", text="LOOK AT CAMERA"))
+                                                    state="disabled", text="Look at camera"))
 
     # ================= ATTENDANCE LOGIC (runs in inference thread) =================
     def process_attendance(self, faces):
@@ -726,7 +726,7 @@ class SmartAttendanceSystem:
                 self.latched_uid = None
             if time.time() - self.last_success_time > SUCCESS_DISPLAY_TIME:
                 def waiting():
-                    self.lbl_status_main.config(text='SCANNING...' if not faces else 'ONE PERSON AT A TIME', fg=GUI_INK)
+                    self.lbl_status_main.config(text='Ready to scan' if not faces else 'One person at a time', fg=GUI_INK)
                     self.lbl_current_status.config(text='', fg=GUI_MUTED)
                     self.lbl_next_window.config(text='', fg=GUI_WARN)
                     self.lbl_name_res.config(text='-', fg=GUI_INK)
@@ -800,7 +800,7 @@ class SmartAttendanceSystem:
 
                             def _apply(st=status_text, sc=status_color,
                                        nw=next_window_text, nm=name, u=uid):
-                                self.lbl_status_main.config(text="ALREADY SCANNED", fg=GUI_WARN)
+                                self.lbl_status_main.config(text="Already recorded", fg=GUI_WARN)
                                 self.lbl_current_status.config(text=st, fg=sc)
                                 self.lbl_next_window.config(text=nw, fg=GUI_WARN)
                                 self.lbl_name_res.config(text=nm, fg=GUI_WARN)
@@ -814,7 +814,7 @@ class SmartAttendanceSystem:
 
         if not success_screen_active and not found_someone:
             def _idle():
-                self.lbl_status_main.config(text="SCANNING...", fg=GUI_INK)
+                self.lbl_status_main.config(text="Ready to scan", fg=GUI_INK)
                 self.lbl_current_status.config(text="", fg=GUI_MUTED)
                 self.lbl_next_window.config(text="", fg=GUI_WARN)
                 self.lbl_name_res.config(text="-", fg=GUI_INK)
@@ -828,7 +828,7 @@ class SmartAttendanceSystem:
             event_id, created = self.transport.submit(uid, name)
         except Exception as exc:
             print('[OUTBOX]', str(exc))
-            self.ui(lambda: self.lbl_status_main.config(text='SCAN NOT SAVED', fg=GUI_ERR))
+            self.ui(lambda: self.lbl_status_main.config(text='Scan not saved', fg=GUI_ERR))
             return
         self.scan_memory[uid] = time.time()
         self.last_success_time = time.time()
@@ -838,9 +838,9 @@ class SmartAttendanceSystem:
             self.on_scan_result(uid, {'action':'DUPLICATE','message':'This scan was already confirmed.', 'flags':[]})
             return
         def apply():
-            self.lbl_status_main.config(text='SCAN SAVED LOCALLY', fg=GUI_TEAL, font=('Arial', 24, 'bold'))
-            self.lbl_current_status.config(text='Waiting for attendance confirmation…', fg=GUI_WARN)
-            self.lbl_next_window.config(text='Will retry automatically if the PC is offline', fg=GUI_WARN)
+            self.lbl_status_main.config(text='Scan saved', fg=GUI_TEAL, font=('Arial', 24, 'bold'))
+            self.lbl_current_status.config(text='Awaiting confirmation', fg=GUI_WARN)
+            self.lbl_next_window.config(text='Retries automatically offline', fg=GUI_WARN)
             self.lbl_name_res.config(text=name, fg=GUI_TEAL)
             self.lbl_id_res.config(text=uid, fg=GUI_TEAL)
         self.ui(apply)
@@ -857,7 +857,7 @@ class SmartAttendanceSystem:
         self.frame_register.pack_forget()
         self.frame_attendance.pack_forget()
 
-        self.lbl_status_main.config(text="WAITING...", fg=GUI_INK)
+        self.lbl_status_main.config(text="Ready to scan", fg=GUI_INK, font=('Arial', 24, 'bold'))
         self.lbl_current_status.config(text="", fg=GUI_MUTED)
         self.lbl_next_window.config(text="", fg=GUI_WARN)
         self.lbl_name_res.config(text="-", fg=GUI_INK)

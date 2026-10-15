@@ -84,7 +84,7 @@ These are excluded from GitHub and the update ZIP. Do not delete the offline out
 
 The default kiosk uses **800x480 fullscreen** on the touchscreen. Launch from a terminal on the touchscreen: it first maps a small managed window, then requests fullscreen after mapping. STOP / MENU and a larger 84px logo share a reserved bottom footer. Touch handling and camera shutdown cleanup remain enabled. Keep the service stopped for this manual workflow.
 
-The welcome menu uses Sugihara maroon branding and a dark maroon action panel with Start scanning and Register employee touch targets. Close kiosk exits Python and releases its camera workers; STOP / MENU returns to this welcome menu without exiting.
+The welcome menu uses Sugihara maroon branding and a dark maroon action panel with Start scanning and Register face touch targets. Close exits Python and releases its camera workers; Stop / Menu returns to this welcome menu without exiting. The screens use short labels, smaller headings and generous spacing; routine status shows just connectivity, with pending scans and camera/recognition problems shown when needed.
 
 Welcome, scanning and registration use dark maroon backgrounds, lighter maroon controls, muted rose labels and cream text. Registration has dark input fields with visible focus borders and a matching touch keyboard. Confirmed attendance uses green, review/pending notices use amber, and errors use pale rose for contrast. The camera preview remains unobstructed and STOP plus the company logo remain in the bottom scanning footer.
 
