@@ -101,3 +101,9 @@ The Pi's DSI touchscreen is 800×480 at (0,0). Python maps there before requesti
 Use the already-working Raspberry Pi environment with Tkinter, Picamera2, OpenCV, NumPy, Pillow, InsightFace and ONNX Runtime. Camera and AI run in separate restartable processes. The setup/check tools use Python's standard library. Preserve the existing face model files as well as face enrollments.
 
 The service starts in scanning mode. **STOP / MENU** pauses recognition and returns to the main menu; it does not exit Python or stop the systemd service. Escape also returns to the menu. The control has a reserved touch area separate from the status text and logo. Tapping it writes `[UI] Menu requested ...` to the service journal, which helps distinguish a missed input from a navigation error. To close the service completely over SSH use `sudo systemctl stop attendance-kiosk`.
+
+### Touchscreen buttons do not respond
+
+Kiosk buttons handle a press followed by a release inside the button without requiring a preceding mouse-hover event. Disabled buttons and releases outside the button do not invoke the action; mouse and keyboard access remain available. STOP is near the top of the status panel so it stays reachable while diagnosing an offset window.
+
+For a manual diagnostic run, keep the service stopped and run `KIOSK_DEBUG_TOUCH=1 python3 -u face.py`. Tap STOP physically. `[TOUCH] press/release` lines report widget class and coordinates without recording entry contents; a successful STOP also logs `[UI] Menu requested`. No `[TOUCH]` lines means Tk received no matching pointer events, so a button callback change alone cannot fix it. Press/release on another widget or unexpected coordinates points to window/input mapping. Window placement and physical input still require verification on the Pi.

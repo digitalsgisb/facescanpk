@@ -4,6 +4,7 @@ import tkinter as tk
 import unittest
 from pathlib import Path
 from kiosk_keyboard import TouchKeyboard
+from kiosk_touch import enable_touch_buttons
 
 
 class KioskControlTests(unittest.TestCase):
@@ -35,6 +36,7 @@ class KioskControlTests(unittest.TestCase):
         self.app.setup_menu()
         self.app.setup_register()
         self.app.setup_attendance()
+        enable_touch_buttons(self.root)
         self.app.show_frame('ATTENDANCE')
         self.root.deiconify()
         self.root.update()
@@ -79,6 +81,40 @@ class KioskControlTests(unittest.TestCase):
             self.assertGreaterEqual(button.winfo_width(),130)
             self.assertIs(self.root.winfo_containing(button.winfo_rootx()+button.winfo_width()//2,
                                                     button.winfo_rooty()+button.winfo_height()//2),button)
+
+    def test_stop_without_hover_and_single_invocation(self):
+        button = self.app.btn_stop
+        calls = []
+        button.configure(command=lambda: calls.append('stop'))
+        button.event_generate('<Leave>')
+        button.configure(state='normal')
+        button.event_generate('<ButtonPress-1>', x=5, y=5)
+        button.event_generate('<ButtonRelease-1>', x=5, y=5)
+        self.root.update()
+        self.assertEqual(calls, ['stop'])
+        button.event_generate('<ButtonRelease-1>', x=5, y=5)
+        self.assertEqual(calls, ['stop'])
+
+    def test_cancelled_or_disabled_tap_does_not_invoke(self):
+        button = self.app.btn_stop
+        calls = []
+        button.configure(command=lambda: calls.append('stop'))
+        button.event_generate('<ButtonPress-1>', x=5, y=5)
+        button.event_generate('<ButtonRelease-1>', x=-3, y=5)
+        button.configure(state='disabled')
+        button.event_generate('<ButtonPress-1>', x=5, y=5)
+        button.event_generate('<ButtonRelease-1>', x=5, y=5)
+        self.assertEqual(calls, [])
+
+    def test_keyboard_tap_without_hover_inserts_once(self):
+        self.app.show_frame('REGISTER')
+        self.root.update()
+        key = self.app.keyboard.keys['A']
+        key.event_generate('<Leave>')
+        key.configure(state='normal')
+        key.event_generate('<ButtonPress-1>', x=5, y=5)
+        key.event_generate('<ButtonRelease-1>', x=5, y=5)
+        self.assertEqual(self.app.entry_id.get(), 'A')
 
 
 if __name__=='__main__':

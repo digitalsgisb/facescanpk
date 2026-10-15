@@ -20,6 +20,7 @@ from types import SimpleNamespace
 from kiosk_transport import ReliableTransport
 from kiosk_config import load_config
 from kiosk_keyboard import TouchKeyboard
+from kiosk_touch import enable_touch_buttons, trace_input
 from kiosk_vision import camera_worker, inference_worker, put_latest
 from datetime import datetime
 
@@ -148,6 +149,9 @@ class SmartAttendanceSystem:
         self.setup_menu()
         self.setup_register()
         self.setup_attendance()
+        enable_touch_buttons(self.root)
+        self.root.bind('<ButtonPress-1>', lambda event: trace_input(event, 'press'))
+        self.root.bind('<ButtonRelease-1>', lambda event: trace_input(event, 'release'))
         self.reload_database()
 
         # --- START BACKGROUND THREADS ---
@@ -379,7 +383,9 @@ class SmartAttendanceSystem:
         # Reserve controls before status text is packed. Images/messages cannot
         # overlap the touch target or push it beyond the 800x480 screen.
         controls = tk.Frame(self.panel_status, bg='#101010', height=54)
-        controls.pack(side='bottom', fill='x', pady=(6, 0))
+        # Keep STOP near the top so it remains reachable even if a compositor
+        # offsets the 480px window below the panel during placement diagnostics.
+        controls.pack(side='top', fill='x', pady=(0, 6))
         controls.pack_propagate(False)
         self.btn_stop = tk.Button(controls, text='STOP / MENU', bg='#cc0000', fg='white',
                                   font=('Arial', 13, 'bold'), width=15, takefocus=True,
