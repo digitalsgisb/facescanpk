@@ -116,6 +116,24 @@ class KioskControlTests(unittest.TestCase):
         key.event_generate('<ButtonRelease-1>', x=5, y=5)
         self.assertEqual(self.app.entry_id.get(), 'A')
 
+    def test_controls_fit_compact_touchscreen_window(self):
+        self.root.geometry('780x400')
+        self.app.show_frame('ATTENDANCE')
+        self.root.update()
+        stop = self.app.btn_stop
+        self.assertLess(stop.winfo_rooty() - self.root.winfo_rooty(), 90)
+        self.app.show_frame('REGISTER')
+        self.root.update()
+        for widget in [self.app.entry_id, self.app.entry_name, self.app.btn_capture,
+                       *self.app.keyboard.keys.values()]:
+            x = widget.winfo_rootx() - self.root.winfo_rootx()
+            y = widget.winfo_rooty() - self.root.winfo_rooty()
+            self.assertGreaterEqual(x, 0)
+            self.assertGreaterEqual(y, 0)
+            self.assertLessEqual(x + widget.winfo_width(), 780)
+            self.assertLessEqual(y + widget.winfo_height(), 400)
+            self.assertGreaterEqual(widget.winfo_height(), 20)
+
 
 if __name__=='__main__':
     unittest.main(verbosity=2)

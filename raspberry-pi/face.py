@@ -48,8 +48,11 @@ SUCCESS_DISPLAY_TIME = 8
 SIMILARITY_THRESHOLD = 0.55
 
 # --- SCREEN CONSTANTS ---
-SCREEN_W = 800
-SCREEN_H = 480
+# Leave room for the Wayfire panel/title bar on the 800x480 touchscreen.
+# A fixed 800x480 managed window was clipped when placed at +10+78.
+KIOSK_FULLSCREEN = os.environ.get('KIOSK_FULLSCREEN') == '1'
+SCREEN_W = 800 if KIOSK_FULLSCREEN else 780
+SCREEN_H = 480 if KIOSK_FULLSCREEN else 400
 
 # --- CAMERA CONFIG ---
 CAM_WIDTH = 640
@@ -76,23 +79,20 @@ class SmartAttendanceSystem:
         self.root = root
         self.root.title("Smart Attendance Kiosk")
 
-        # --- FULLSCREEN KIOSK ---
-        # IMPORTANT: use the '-fullscreen' attribute, NOT overrideredirect(True).
-        # overrideredirect bypasses the window manager, so the window never gets
-        # KEYBOARD FOCUS (you can't type in the Entry fields) and popup dialogs
-        # (messagebox) open HIDDEN BEHIND the window. Fullscreen keeps the WM in
-        # charge while still hiding all decorations.
-        # DSI-1 is 800x480 at (0,0); HDMI starts at (800,0).
-        # Geometry alone cannot select a Wayfire output. configure_display.py
-        # installs the native DSI-1 placement rule independently of launch terminal.
+        # --- TOUCHSCREEN WINDOW ---
+        # Launch from the touchscreen terminal. Do not ask Wayfire to select a
+        # fullscreen output by default. Keep a managed window for entry focus
+        # and dialogs, with space for the desktop's panel and window decorations.
         self.root.configure(bg=GUI_BG)
-        self.root.geometry(f"{SCREEN_W}x{SCREEN_H}+0+0")
+        self.root.geometry(f"{SCREEN_W}x{SCREEN_H}")
+        self.root.resizable(False, False)
         self.root.update()
-        self.root.attributes("-fullscreen", True)
+        if KIOSK_FULLSCREEN:
+            self.root.attributes("-fullscreen", True)
         self.root.attributes('-topmost', True)
         self.root.after(1000, lambda: print(
             f'[DISPLAY] Tk window: {self.root.winfo_geometry()}; '
-            'verify DSI-1 placement and touch physically', flush=True))
+            'touchscreen terminal launch; test physical touch', flush=True))
 
         self.root.configure(bg=GUI_BG)
         self.root.update_idletasks()

@@ -80,6 +80,18 @@ These are excluded from GitHub and the update ZIP. Do not delete the offline out
 
 ## Screen and dependencies
 
+### Current setup: launch from the touchscreen terminal
+
+The default kiosk now uses a fixed **780x400** managed window on the **800x480** touchscreen. The margin accommodates the desktop panel and title bar; an 800x480 window at the observed offset (+10,+78) extended below the screen. The camera preview scales to the smaller window. Launch from a terminal on the touchscreen; the app does not request fullscreen or select a monitor by default. Keep the service stopped for this manual workflow.
+
+```bash
+sudo systemctl stop attendance-kiosk
+cd /home/wblsugihara
+KIOSK_DEBUG_TOUCH=1 python3 -u face.py
+```
+
+Use physical touch to test STOP, registration fields, keyboard and Cancel. This mode still needs physical verification; a window size change cannot repair missing input events. The optional `KIOSK_FULLSCREEN=1 python3 face.py` restores the previous 800x480 fullscreen request, including its compositor placement limitations. The older automatic two-screen instructions below are optional and are not part of the current manual touchscreen setup.
+
 ### Pin the kiosk to DSI-1 under Wayfire
 
 Python's geometry/fullscreen request cannot guarantee an output under Wayfire. Run this once as the desktop user (not with sudo), from the installed kiosk folder:
@@ -96,7 +108,7 @@ Stop the service before a manual test, then launch `python3 -u face.py` from the
 
 The old `force_kiosk_fullscreen.sh` service helper also moves this window; test manually first to isolate it. To undo the configuration change, restore the timestamped `wayfire.ini.attendance-*.bak` backup created by the setup command.
 
-The Pi's DSI touchscreen is 800×480 at (0,0). Python maps there before requesting fullscreen. The HDMI screen at (800,0) displays a browser connected to the PC. Final placement is controlled by the Pi's window manager.
+The Pi's DSI touchscreen is 800×480 at (0,0). The current manual setup uses a 780x400 window launched from its terminal. HDMI browser placement is independent. Final window placement is controlled by the Pi's window manager.
 
 Use the already-working Raspberry Pi environment with Tkinter, Picamera2, OpenCV, NumPy, Pillow, InsightFace and ONNX Runtime. Camera and AI run in separate restartable processes. The setup/check tools use Python's standard library. Preserve the existing face model files as well as face enrollments.
 
