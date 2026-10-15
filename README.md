@@ -2,6 +2,38 @@
 
 Two device packages, one attendance system. The Raspberry Pi handles the camera, face matching and touchscreen. The AI PC runs the React dashboard and its Python/SQLite API. The Pi's HDMI browser displays the board served by the PC.
 
+## Pull the latest update
+
+Update the **AI PC first**, then the Pi. These commands assume you already cloned the repository into `~/facescanpk`. Run each command only after the previous one succeeds. Preserve local changes if Git reports a conflict.
+
+### AI PC — Ubuntu / SSH / Docker
+
+Run in the AI PC's SSH terminal. Back up the running database, pull the latest code, then rebuild the dashboard and restart the container:
+
+```bash
+cd ~/facescanpk/ai-pc
+sudo docker compose exec attendance python manage.py backup --output "runtime/backups/pre-update-$(date +%Y%m%d-%H%M%S).zip"
+cd ..
+git pull --ff-only origin main
+cd ai-pc
+sudo docker compose up -d --build
+sudo docker compose ps
+curl --fail http://127.0.0.1:3800/api/health
+```
+
+If the container is still starting, retry the health check after startup. Keep your existing `.env` and `runtime/`. Refresh the Pi's HDMI browser to load the new React app. For a PC running Python directly, use the [native update commands](ai-pc/README.md#git-pull-update--native-python-installation).
+
+### Raspberry Pi — pull the kiosk code
+
+Run in the Pi's terminal:
+
+```bash
+cd ~/facescanpk
+git pull --ff-only origin main
+```
+
+**Your running kiosk is in `/home/wblsugihara`.** Pulling updates the checkout only; follow the [Pi copy and restart commands](raspberry-pi/README.md#git-pull-update--existing-pi-installation) to stop the kiosk, back up its data, copy the updated code into that live folder, check the connection and restart. Keep its `database/`, `kiosk-runtime/` and `kiosk.env`.
+
 ## Start here: step-by-step instructions
 
 Choose the instructions for what you are doing:
