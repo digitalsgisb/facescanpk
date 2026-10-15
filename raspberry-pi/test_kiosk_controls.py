@@ -23,6 +23,9 @@ class KioskControlTests(unittest.TestCase):
         namespace={'tk':tk,'TouchKeyboard':TouchKeyboard,'GUI_BG':'#faf7f5','GUI_PANEL':'#faf7f5',
                    'GUI_ACCENT':'#177245','GUI_WARN':'#9a5a12', 'GUI_INK':'#302428',
                    'GUI_MUTED':'#7f6c70', 'GUI_BRAND':'#781b28', 'GUI_BORDER':'#dfc9cc'}
+        for node in source.body:
+            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id.startswith('GUI_'):
+                namespace[node.targets[0].id] = ast.literal_eval(node.value)
         exec(compile(ast.Module(body=[cls],type_ignores=[]),'face.py','exec'),namespace)
         self.app=namespace['SmartAttendanceSystem']()
         self.app.root=self.root
