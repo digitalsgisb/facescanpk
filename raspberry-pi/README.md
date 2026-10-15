@@ -84,9 +84,9 @@ These are excluded from GitHub and the update ZIP. Do not delete the offline out
 
 The default kiosk uses **800x480 fullscreen** on the touchscreen. Launch from a terminal on the touchscreen: it first maps a small managed window, then requests fullscreen after mapping. STOP / MENU and a larger 84px logo share a reserved bottom footer. Touch handling and camera shutdown cleanup remain enabled. Keep the service stopped for this manual workflow.
 
-The welcome menu uses pure black panels with Start scanning and Register face touch targets. Close exits Python and releases its camera workers; Stop / Menu returns to this welcome menu without exiting. The screens use short labels, smaller headings and generous spacing; routine status shows just connectivity, with pending scans and camera/recognition problems shown when needed.
+The welcome menu uses pure black panels, centred branding and maroon Start scanning and Register face touch targets. Close exits Python and releases its camera workers; Stop / Menu returns to this welcome menu without exiting. The screens use short labels, smaller headings and generous spacing; routine status shows just connectivity, with pending scans and camera/recognition problems shown when needed. The old attendance workspace subtitle is removed from the kiosk menu.
 
-Welcome, scanning and registration use pure black backgrounds and controls, white text and thin white outlines, including the keyboard and entry fields. Confirmed attendance uses green, review/pending notices use amber, and errors use pale rose for contrast. The camera preview remains unobstructed and STOP plus the company logo remain in the bottom scanning footer.
+Welcome, scanning and registration use pure black backgrounds with white text. Main action buttons are maroon; keyboard keys and entry fields remain black with thin white outlines. Confirmed attendance uses green, review/pending notices use amber, and errors use pale rose for contrast. The camera preview remains unobstructed and STOP plus the company logo remain in the bottom scanning footer.
 
 ```bash
 sudo systemctl stop attendance-kiosk
