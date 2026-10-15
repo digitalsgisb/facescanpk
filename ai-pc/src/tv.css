@@ -1,0 +1,47 @@
+.redesigned-board.tv-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  background: #faf7f7;
+}
+.fit-all .board-stage { transform-origin: top left; }
+/* Department labels must not stretch employee cards in short groups. */
+.tv-department { align-items: center; }
+.tv-department-people { align-content: start; align-items: start; grid-auto-rows: 45px; }
+.tv-employee { height: 45px; min-height: 45px; max-height: 45px; }
+.fit-all .tv-department-people { grid-auto-rows: 31px; }
+.fit-all .tv-employee { height: 31px; min-height: 31px; max-height: 31px; }
+.tv-department-people { grid-template-columns: repeat(auto-fill, 137px); }
+.fit-all .tv-department-people { grid-template-columns: repeat(auto-fill, 112px); }
+.redesigned-board .board-stage { background: #f7f9fc; border: 1px solid #e1e6ed; border-radius: 6px; overflow: hidden; }
+.redesigned-board .board-group { padding: 0; margin: 0; gap: 0; border: 0; border-bottom: 1px solid #e1e6ed; border-radius: 0; background: #f7f9fc; }
+.redesigned-board .board-group:last-child { border-bottom: 0; }
+.board-group .tv-department-title { width: 126px; padding: 9px 12px; text-align: right; }
+.board-group .tv-department-title h3 { color: #402b2b; overflow-wrap: anywhere; }
+.board-group .tv-department-title small { display: block; color: #6d7b90; }
+.board-group .tv-department-title small b { color: #14863d; }
+.board-group-teams { flex: 1; min-width: 0; border-left: 1px solid #e1e6ed; }
+.board-team-row { display: flex; align-items: stretch; border-bottom: 1px dashed #dce3ec; }
+.board-team-row:last-child { border-bottom: 0; }
+.board-team-strip { margin: 0; width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #68778d; color: white; font-size: 12px; line-height: 1; }
+.board-team-strip.team-a { background: #0a9671; }
+.board-team-strip.team-b { background: #326ee0; }
+.board-group .tv-department-people { padding: 6px; }
+.fit-all .board-group .tv-department-title { width: 116px; padding: 7px 10px; }
+.fit-all .board-group .tv-department-people { padding: 5px; grid-auto-rows: 34px; gap: 5px; }
+.fit-all .board-group .tv-employee { height: 34px; min-height: 34px; max-height: 34px; }
+@media (max-width: 900px) { .redesigned-board .board-group { flex-direction: row; } }
+@media (max-width: 650px) { .board-group .tv-department-title,.fit-all .board-group .tv-department-title { width: 80px; padding: 6px; } }
+.department-navigator { flex-direction: row; }
+.brand > div { white-space: nowrap; font-size: 16px; }
+@media (max-width: 1250px) { .brand > div { font-size: 14px; } }
+@media (max-width: 900px) { .brand > div { font-size: 12px; } }
+@media (max-width: 650px) { .brand > div { font-size: 16px; } }
