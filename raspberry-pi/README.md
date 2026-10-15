@@ -84,6 +84,8 @@ These are excluded from GitHub and the update ZIP. Do not delete the offline out
 
 The default kiosk uses **800x480 fullscreen** on the touchscreen. Launch from a terminal on the touchscreen: it first maps a small managed window, then requests fullscreen after mapping. STOP / MENU and a larger 84px logo share a reserved bottom footer. Touch handling and camera shutdown cleanup remain enabled. Keep the service stopped for this manual workflow.
 
+The welcome menu uses Sugihara maroon branding and a light action panel with Start scanning and Register employee touch targets. Close kiosk exits Python and releases its camera workers; STOP / MENU returns to this welcome menu without exiting.
+
 ```bash
 sudo systemctl stop attendance-kiosk
 cd /home/wblsugihara

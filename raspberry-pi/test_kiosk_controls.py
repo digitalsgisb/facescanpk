@@ -57,7 +57,7 @@ class KioskControlTests(unittest.TestCase):
         self.assertTrue(self.app.frame_menu.winfo_ismapped())
         self.assertFalse(self.app.frame_attendance.winfo_ismapped())
         self.assertTrue(self.app._threads_running)
-        register=next(w for w in self.app.frame_menu.winfo_children() if isinstance(w,tk.Button) and w.cget('text')=='REGISTER NEW USER')
+        register=self.app.btn_menu_register
         register.invoke()
         self.root.update()
         self.assertEqual(self.app.mode,'REGISTER')

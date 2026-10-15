@@ -261,30 +261,62 @@ class SmartAttendanceSystem:
 
     # ================= GUI LAYOUTS =================
     def setup_menu(self):
-        self.frame_menu = tk.Frame(self.root, bg=GUI_BG)
+        maroon, paper, ink = '#781b28', '#faf7f5', '#302428'
+        self.frame_menu = tk.Frame(self.root, bg=paper)
 
-        tk.Label(self.frame_menu, text="E-ATTENDANCE SYSTEM",
-                 font=("Arial", 24, "bold"), bg=GUI_BG, fg=GUI_ACCENT).pack(pady=(24, 18))
-
-        btn_style = {"font": ("Arial", 16, "bold"), "width": 25, "height": 2, "bd": 0}
-
-        tk.Button(self.frame_menu, text="START SCANNING",
-                  bg="#008000", fg="white",
-                  command=lambda: self.show_frame("ATTENDANCE"), **btn_style).pack(pady=8)
-
-        tk.Button(self.frame_menu, text="REGISTER NEW USER",
-                  bg="#0055aa", fg="white",
-                  command=lambda: self.show_frame("REGISTER"), **btn_style).pack(pady=8)
-
-        tk.Button(self.frame_menu, text="SHUTDOWN",
-                  bg="#550000", fg="white",
-                  command=self.on_shutdown, **btn_style).pack(pady=8)
-
-        logo = self.get_logo_image(150, 150, GUI_BG)
+        brand = tk.Frame(self.frame_menu, bg=maroon)
+        brand.place(relx=0, rely=0, relwidth=.36, relheight=1)
+        tk.Frame(brand, bg='#a4414b', height=4).pack(side='bottom', fill='x')
+        tk.Label(brand, text='SUGIHARA  /  PORT KLANG', font=('Arial', 9, 'bold'),
+                 bg=maroon, fg='#f3d9dc', anchor='w').place(x=24, y=28)
+        logo = self.get_logo_image(112, 112, maroon)
         if logo:
-            lbl_logo = tk.Label(self.frame_menu, image=logo, bg=GUI_BG)
+            lbl_logo = tk.Label(brand, image=logo, bg=maroon, bd=0)
             lbl_logo.image = logo
-            lbl_logo.place(relx=1.0, x=-30, rely=1.0, y=-30, anchor="se")
+            lbl_logo.place(x=22, rely=.23, anchor='nw')
+        tk.Label(brand, text='Digital\nAttendance', font=('Arial', 24, 'bold'),
+                 justify='left', anchor='w', bg=maroon, fg='white').place(x=24, rely=.52)
+        tk.Label(brand, text='attendance workspace', font=('Arial', 11),
+                 bg=maroon, fg='#edcbd0').place(x=24, rely=.75)
+        tk.Label(brand, text='Face recognition kiosk', font=('Arial', 10),
+                 bg=maroon, fg='#edcbd0').place(x=24, rely=1, y=-30, anchor='sw')
+
+        actions = tk.Frame(self.frame_menu, bg=paper)
+        actions.place(relx=.36, rely=0, relwidth=.64, relheight=1)
+        content = tk.Frame(actions, bg=paper)
+        content.pack(fill='both', expand=True, padx=30, pady=24)
+        footer = tk.Frame(content, bg=paper)
+        footer.pack(side='bottom', fill='x', pady=(12, 0))
+        self.btn_menu_shutdown = tk.Button(footer, text='Close kiosk', command=self.on_shutdown,
+            font=('Arial', 10), bg='#eee5e4', fg='#6a4247', activebackground='#e6d5d5',
+            activeforeground=maroon, relief='flat', bd=0, padx=16, pady=10, cursor='hand2')
+        self.btn_menu_shutdown.pack(side='right')
+        tk.Label(content, text='Welcome.', font=('Arial', 27, 'bold'),
+                 bg=paper, fg=ink, anchor='w').pack(fill='x', pady=(14, 6))
+        tk.Label(content, text='Choose an option to get started.', font=('Arial', 11),
+                 bg=paper, fg='#7f6c70', anchor='w').pack(fill='x', pady=(0, 22))
+
+        primary = tk.Frame(content, bg=maroon, height=64)
+        primary.pack(fill='x')
+        primary.pack_propagate(False)
+        self.btn_menu_scan = tk.Button(primary, text='Start scanning',
+            command=lambda: self.show_frame('ATTENDANCE'), font=('Arial', 15, 'bold'),
+            bg=maroon, fg='white', activebackground='#952c3a', activeforeground='white',
+            relief='flat', bd=0, anchor='w', padx=20, cursor='hand2')
+        self.btn_menu_scan.pack(fill='both', expand=True)
+        tk.Label(content, text='Clock in or out using the camera.', font=('Arial', 10),
+                 bg=paper, fg='#7f6c70', anchor='w').pack(fill='x', pady=(6, 18))
+
+        secondary = tk.Frame(content, bg='#dfc9cc', height=60, padx=1, pady=1)
+        secondary.pack(fill='x')
+        secondary.pack_propagate(False)
+        self.btn_menu_register = tk.Button(secondary, text='Register employee',
+            command=lambda: self.show_frame('REGISTER'), font=('Arial', 14, 'bold'),
+            bg='white', fg=maroon, activebackground='#f4e8e9', activeforeground=maroon,
+            relief='flat', bd=0, anchor='w', padx=19, cursor='hand2')
+        self.btn_menu_register.pack(fill='both', expand=True)
+        tk.Label(content, text='Set up face recognition for an employee.', font=('Arial', 10),
+                 bg=paper, fg='#7f6c70', anchor='w').pack(fill='x', pady=(6, 0))
 
     def setup_register(self):
         self.frame_register = tk.Frame(self.root, bg=GUI_BG)
