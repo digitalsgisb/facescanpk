@@ -2,6 +2,17 @@
 
 Two device packages, one attendance system. The Raspberry Pi handles the camera, face matching and touchscreen. The AI PC runs the React dashboard and its Python/SQLite API. The Pi's HDMI browser displays the board served by the PC.
 
+## Start here: step-by-step instructions
+
+Choose the instructions for what you are doing:
+
+1. **First connection / setting up the AI PC:** follow [AI PC setup](ai-pc/README.md#step-by-step-first-setup-on-the-ai-pc), then [Pi connection](raspberry-pi/README.md#step-by-step-connect-your-existing-pi).
+2. **Updating an existing installation:** follow [AI PC update](ai-pc/README.md#step-by-step-update-the-ai-pc), then [Pi update](raspberry-pi/README.md#step-by-step-update-the-pi). Update the PC first so the Pi can check the new API.
+3. **Putting the board on the HDMI screen:** follow [two-screen setup](raspberry-pi/README.md#step-by-step-two-screen-setup).
+4. **Moving existing employees and attendance to a different PC:** follow [private data transfer](ai-pc/README.md#step-by-step-transfer-existing-company-data). This replaces the destination database intentionally; it is not a normal code update.
+
+The folder names describe the destination device. The `ai-pc/` folder includes a Python server as well as React: the Pi sends scans to that server, and the browser reads attendance from it.
+
 | Folder | Install on | Contains |
 | --- | --- | --- |
 | [`raspberry-pi/`](raspberry-pi/) | Raspberry Pi | Python kiosk, registration keyboard, connection setup and durable scan delivery |
