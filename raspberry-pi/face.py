@@ -93,7 +93,7 @@ class SmartAttendanceSystem:
         self.root.configure(bg=GUI_BG)
         self.root.update_idletasks()
         self.root.focus_force()
-        self.root.bind("<Escape>", lambda e: self.on_shutdown())
+        self.root.bind("<Escape>", lambda e: self.return_to_menu('Escape'))
 
         # Native calls run in separate processes and can be restarted on a stall.
         self.process_context = mp.get_context('spawn')
@@ -254,21 +254,21 @@ class SmartAttendanceSystem:
         self.frame_menu = tk.Frame(self.root, bg=GUI_BG)
 
         tk.Label(self.frame_menu, text="E-ATTENDANCE SYSTEM",
-                 font=("Arial", 28, "bold"), bg=GUI_BG, fg=GUI_ACCENT).pack(pady=(80, 40))
+                 font=("Arial", 24, "bold"), bg=GUI_BG, fg=GUI_ACCENT).pack(pady=(24, 18))
 
         btn_style = {"font": ("Arial", 16, "bold"), "width": 25, "height": 2, "bd": 0}
 
         tk.Button(self.frame_menu, text="START SCANNING",
                   bg="#008000", fg="white",
-                  command=lambda: self.show_frame("ATTENDANCE"), **btn_style).pack(pady=15)
+                  command=lambda: self.show_frame("ATTENDANCE"), **btn_style).pack(pady=8)
 
         tk.Button(self.frame_menu, text="REGISTER NEW USER",
                   bg="#0055aa", fg="white",
-                  command=lambda: self.show_frame("REGISTER"), **btn_style).pack(pady=15)
+                  command=lambda: self.show_frame("REGISTER"), **btn_style).pack(pady=8)
 
         tk.Button(self.frame_menu, text="SHUTDOWN",
                   bg="#550000", fg="white",
-                  command=self.on_shutdown, **btn_style).pack(pady=15)
+                  command=self.on_shutdown, **btn_style).pack(pady=8)
 
         logo = self.get_logo_image(150, 150, GUI_BG)
         if logo:
@@ -363,19 +363,31 @@ class SmartAttendanceSystem:
     def setup_attendance(self):
         self.frame_attendance = tk.Frame(self.root, bg="black")
 
-        # Fixed width video label = no resize/flicker
-        self.lbl_video_att = tk.Label(self.frame_attendance, bg="black",
-                                      width=self.display_width, height=self.display_height)
-        self.lbl_video_att.pack(side="left", fill="y")
+        # Keep camera geometry in pixels, including before the first image arrives.
+        video = tk.Frame(self.frame_attendance, bg='black', width=self.display_width)
+        video.pack(side='left', fill='y')
+        video.pack_propagate(False)
+        self.lbl_video_att = tk.Label(video, bg='black', bd=0)
+        self.lbl_video_att.place(relx=0, rely=0, relwidth=1, relheight=1)
 
         self.panel_status = tk.Frame(self.frame_attendance, bg="#101010", padx=20, pady=20)
         self.panel_status.pack(side="right", fill="both", expand=True)
 
-        logo = self.get_logo_image(120, 80, "#101010")
+        # Reserve controls before status text is packed. Images/messages cannot
+        # overlap the touch target or push it beyond the 800x480 screen.
+        controls = tk.Frame(self.panel_status, bg='#101010', height=54)
+        controls.pack(side='bottom', fill='x', pady=(6, 0))
+        controls.pack_propagate(False)
+        self.btn_stop = tk.Button(controls, text='STOP / MENU', bg='#cc0000', fg='white',
+                                  font=('Arial', 13, 'bold'), width=15, takefocus=True,
+                                  command=self.return_to_menu)
+        self.btn_stop.pack(side='left', fill='y', padx=(0, 10))
+
+        logo = self.get_logo_image(54, 48, "#101010")
         if logo:
-            lbl_logo = tk.Label(self.panel_status, image=logo, bg="#101010")
+            lbl_logo = tk.Label(controls, image=logo, bg="#101010")
             lbl_logo.image = logo
-            lbl_logo.place(relx=1.0, x=-20, rely=1.0, y=-20, anchor="se")
+            lbl_logo.pack(side='right')
 
         # Clock
         self.lbl_clock = tk.Label(
@@ -433,11 +445,6 @@ class SmartAttendanceSystem:
             anchor="w", justify="left"
         )
         self.lbl_id_res.pack(anchor="w", fill="x")
-
-        tk.Button(self.panel_status, text="STOP",
-                  bg="#cc0000", fg="white", font=("Arial", 10, "bold"), width=10,
-                  command=lambda: self.show_frame("MENU")).place(
-                      relx=0.0, x=20, rely=1.0, y=-20, anchor="sw")
 
     def update_clock(self):
         now = datetime.now().strftime("%d %b %Y  %H:%M:%S")
@@ -758,6 +765,13 @@ class SmartAttendanceSystem:
             self.lbl_name_res.config(text=name, fg=GUI_TEAL)
             self.lbl_id_res.config(text=uid, fg=GUI_TEAL)
         self.ui(apply)
+
+    def return_to_menu(self, source='STOP button'):
+        print(f'[UI] Menu requested via {source}; previous mode={self.mode}', flush=True)
+        self.mode = 'MENU'
+        self.candidate_uid = None
+        self.candidate_count = 0
+        self.show_frame('MENU')
 
     def show_frame(self, mode):
         self.frame_menu.pack_forget()

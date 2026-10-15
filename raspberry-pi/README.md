@@ -83,3 +83,5 @@ These are excluded from GitHub and the update ZIP. Do not delete the offline out
 The Pi's DSI touchscreen is 800×480 at (0,0). Python maps there before requesting fullscreen. The HDMI screen at (800,0) displays a browser connected to the PC. Final placement is controlled by the Pi's window manager.
 
 Use the already-working Raspberry Pi environment with Tkinter, Picamera2, OpenCV, NumPy, Pillow, InsightFace and ONNX Runtime. Camera and AI run in separate restartable processes. The setup/check tools use Python's standard library. Preserve the existing face model files as well as face enrollments.
+
+The service starts in scanning mode. **STOP / MENU** pauses recognition and returns to the main menu; it does not exit Python or stop the systemd service. Escape also returns to the menu. The control has a reserved touch area separate from the status text and logo. Tapping it writes `[UI] Menu requested ...` to the service journal, which helps distinguish a missed input from a navigation error. To close the service completely over SSH use `sudo systemctl stop attendance-kiosk`.
