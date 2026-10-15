@@ -31,6 +31,47 @@ Extract the matching ZIP and copy its folder contents over the existing installa
 
 Company data is deliberately excluded from this public repository. The local `Smart-Attendance-Company-Data-PRIVATE.zip` supplied separately is a private transfer/restore archive, not an update ZIP. It contains employee records/photos and a consistent copy of the live PC database. Keep it off GitHub. An installation without company data starts with an empty employee list.
 
+## Git push, pull and device updates
+
+`git push` uploads code changes from your development checkout to GitHub. `git pull --ff-only` downloads them on each device. Update the AI PC first, then the Pi. ZIP installations do not contain `.git`; use the ZIP update instructions or clone the repository once before using Git commands.
+
+| Device / task | Copy-and-paste commands |
+| --- | --- |
+| AI PC on Ubuntu / SSH / Docker | [Pull, rebuild and check the API](ai-pc/DOCKER-SSH.md#10-update-later) |
+| AI PC running Python directly | [Pull, rebuild React and restart](ai-pc/README.md#git-pull-update--native-python-installation) |
+| Pi with the kiosk in `/home/wblsugihara` | [Pull and copy updated kiosk files](raspberry-pi/README.md#git-pull-update--existing-pi-installation) |
+
+### Push code changes to GitHub
+
+Run from your development repository, not from a device's private data folder. Review the diff and stage the exact files you changed. Replace `PATH_TO_CHANGED_FILE` with each real source or README path; repeat the `git add` command for more files.
+
+```bash
+git switch main
+git status --short
+git diff
+git add -- PATH_TO_CHANGED_FILE
+git diff --cached
+git commit -m "Describe the Pi or AI PC changes"
+git pull --rebase origin main
+git push origin main
+```
+
+Pi paths begin with `raspberry-pi/`; AI PC paths begin with `ai-pc/`. GitHub write access is required to push. If Git reports a conflict or local changes, resolve them before continuing. Keep private data and credentials excluded.
+
+If you also maintain the downloadable ZIPs, rebuild React after frontend changes, then regenerate and commit the packages **before pushing**. From the repository root, using Python and Node.js in your development environment:
+
+```bash
+cd ai-pc
+npm ci
+npm run build
+cd ..
+python tools/package.py
+git add -- downloads/Smart-Attendance-AI-PC.zip downloads/Smart-Attendance-Pi.zip downloads/SHA256SUMS.txt
+git commit -m "Refresh device download packages"
+git pull --rebase origin main
+git push origin main
+```
+
 ## Raspberry Pi
 
 Use the Pi's existing Python environment and preserve its `database/` face enrollments, `kiosk.env` connection settings and `kiosk-runtime/` offline scan queue. From the Pi installation folder:

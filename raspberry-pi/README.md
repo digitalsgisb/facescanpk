@@ -48,6 +48,66 @@ For the Ubuntu Docker installation use **port 3800** in the address, for example
 6. Start the kiosk with `bash run_kiosk.sh` or restart its existing service. Confirm that the camera appears on the touchscreen and connectivity reports online. Queued scans retry automatically.
 7. If the update fails, stop the kiosk and restore the previous **code files** from the backup first. Retain the newest outbox and face enrollment data; restoring an older outbox can replay or lose scan-delivery state. Keep the failed installation for troubleshooting.
 
+### Git pull update — existing Pi installation
+
+Run on the **Pi**, after updating the AI PC. These commands keep the existing live kiosk in `/home/wblsugihara`, matching the touchscreen launcher below. Change that path if your installation is elsewhere. `~/facescanpk` is a separate Git checkout used to download the code.
+
+If the Pi does not have that checkout yet, clone it once:
+
+```bash
+cd ~
+git clone https://github.com/digitalsgisb/facescanpk.git
+```
+
+Stop the kiosk before copying. For a manual touchscreen run, press Ctrl+C in its terminal and wait for the camera to close. If it runs as the existing `attendance-kiosk` service, stop that service:
+
+```bash
+sudo systemctl stop attendance-kiosk
+```
+
+Then run this block. It stops on failure, backs up the private kiosk data, pulls the latest code, copies only the named application files, and checks the existing PC connection:
+
+```bash
+(
+set -e
+umask 077
+cd ~/facescanpk
+git status --short
+git pull --ff-only origin main
+cd /home/wblsugihara
+backup="$HOME/attendance-backups/pi-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$backup"
+for item in database kiosk-runtime kiosk.env; do
+    if [ -e "$item" ]; then cp -a -- "$item" "$backup/"; fi
+done
+files=(face.py kiosk_config.py kiosk_keyboard.py kiosk_touch.py
+       kiosk_transport.py kiosk_vision.py configure_kiosk.py
+       configure_display.py run_kiosk.sh kiosk.env.example 1.png)
+for file in "${files[@]}"; do
+    cp -- "$HOME/facescanpk/raspberry-pi/$file" "/home/wblsugihara/$file"
+done
+python3 configure_kiosk.py --check
+)
+```
+
+Activate the kiosk's existing Python environment before running the block if it uses one. Keep `database/`, `kiosk-runtime/`, `kiosk.env` and face models in the live folder; the copy loop does not replace them. If `git pull` reports local changes/conflicts, resolve them before proceeding. Do not reset or clean the checkout to discard files.
+
+After a successful connection check, launch from the **touchscreen terminal**:
+
+```bash
+cd /home/wblsugihara
+bash run_kiosk.sh
+```
+
+If you normally use the service instead of a manual touchscreen run, start only that service:
+
+```bash
+sudo systemctl start attendance-kiosk
+sudo systemctl status attendance-kiosk --no-pager
+```
+
+Refresh the HDMI browser to load the updated AI PC dashboard. Pi updates do not require an npm build. To upload Pi source changes, use the repository's [Git push commands](../README.md#push-code-changes-to-github), staging the intended files under `raspberry-pi/` in the checkout.
+
 ## Step-by-step: two-screen setup
 
 1. Keep **DSI-1** at **800×480**, position **0,0**, scale **1**. This is the Python touchscreen.

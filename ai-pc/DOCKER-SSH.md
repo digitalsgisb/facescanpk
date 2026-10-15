@@ -128,17 +128,26 @@ On the Pi browser, open `http://AI_PC_IP:3800`, sign in with the admin password,
 
 ## 10. Update later
 
-Create a consistent private backup before updating:
+Run on the **Ubuntu AI PC through SSH** in your existing checkout. This block stops if any command fails. Create a consistent private backup, pull the latest GitHub code, then rebuild and restart:
 
 ```bash
+(
+set -e
 cd ~/facescanpk/ai-pc
 sudo docker compose exec attendance python manage.py backup --output "runtime/backups/pre-update-$(date +%Y%m%d-%H%M%S).zip"
-git pull --ff-only
+git status --short
+git pull --ff-only origin main
 sudo docker compose up -d --build
 sudo docker compose ps
+curl --fail http://127.0.0.1:3800/api/health
+)
 ```
 
 This preserves the bind-mounted `runtime/` directory and `.env`. Never delete `runtime/` to fix a failed build. If Git reports local source changes, preserve/resolve them first. A plain Docker restart does not rebuild changed React code; use the build command above.
+
+If the health check fails while the container is starting, inspect `sudo docker compose logs --tail=100 attendance` from `~/facescanpk/ai-pc` and retry the health check after startup. Use your configured host port if it differs from 3800. Refresh the Pi's HDMI browser after the update. Update the Pi separately using its [pull/copy/restart commands](../raspberry-pi/README.md#git-pull-update--existing-pi-installation).
+
+To upload source changes to GitHub from a development checkout, follow the [Git push commands](../README.md#push-code-changes-to-github). Updating the running AI PC normally only needs the pull/rebuild block above.
 
 ## HTTP / company HTTPS
 

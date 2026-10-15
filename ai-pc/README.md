@@ -84,11 +84,44 @@ The archive does not contain the Raspberry Pi's face enrollments or offline queu
 
 ## If you update from Git source instead of the ZIP
 
-1. Stop the relevant attendance program and back up its private data as above.
-2. From your repository checkout, run `git pull --ff-only`. If Git reports local source changes/conflicts, preserve and resolve those changes before proceeding; do not discard them just to update.
-3. On the AI PC, enter `ai-pc/` and run `npm ci`, then `npm run build`. The source repository does not track `dist/`; every React source update needs a fresh build. Restart the PC API with its existing settings.
-4. On the Pi, run the code in `raspberry-pi/` using its existing Python environment. For the first change to a cloned folder, stop the kiosk and privately transfer its existing `database/`, `kiosk-runtime/` and `kiosk.env` there; do not start an empty replacement outbox while old queued scans remain elsewhere.
-5. Run the Pi connection check and verify the live board before returning the system to normal use.
+For the Ubuntu Docker installation, use [these SSH pull/rebuild commands](DOCKER-SSH.md#10-update-later). Docker builds React inside the image; a restart alone does not apply new source code. For the Pi, use its [Git update commands](../raspberry-pi/README.md#git-pull-update--existing-pi-installation).
+
+### Git pull update — native Python installation
+
+These commands assume the live installation is `ai-pc/` inside an existing Git checkout. If you installed from a ZIP, use the ZIP update steps above instead. Stop the existing Python server/service first and make a private backup of `runtime/` and `data/` as described above. Keep the same Python environment and LAN/HTTPS settings.
+
+On **Windows PowerShell**, replace the example checkout path if needed. Run each command only after the previous one succeeds:
+
+```powershell
+Set-Location -LiteralPath 'C:\SmartAttendance\facescanpk'
+git status --short
+git pull --ff-only origin main
+Set-Location ai-pc
+python -m pip install -r requirements.txt
+npm ci
+npm run build
+python server.py --host 0.0.0.0
+```
+
+On **Linux**, after stopping and backing up the native service, this block stops at the first failed command:
+
+```bash
+(
+set -e
+cd ~/facescanpk
+git status --short
+git pull --ff-only origin main
+cd ai-pc
+python3 -m pip install -r requirements.txt
+npm ci
+npm run build
+python3 server.py --host 0.0.0.0
+)
+```
+
+Use your existing service launcher instead of the final `python server.py` command if the API normally runs as a service. Retain existing certificate arguments for HTTPS. The native examples use port **8765**; verify `http://127.0.0.1:8765/api/health` and refresh the Pi's HDMI browser after the restart. The repository does not track `dist/`, so every React update needs a build.
+
+To upload AI PC source changes, follow the repository's [Git push commands](../README.md#push-code-changes-to-github), staging only the intended `ai-pc/` files.
 
 ## Public repository exclusions
 
