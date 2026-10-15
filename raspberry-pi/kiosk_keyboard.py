@@ -3,7 +3,7 @@ import tkinter as tk
 
 
 class TouchKeyboard(tk.Frame):
-    def __init__(self, parent, on_insert, on_backspace, on_clear, background='#40101b'):
+    def __init__(self, parent, on_insert, on_backspace, on_clear, background='#000000'):
         super().__init__(parent, bg=background)
         self.keys = {}
         for column in range(20):
@@ -17,18 +17,18 @@ class TouchKeyboard(tk.Frame):
                 button = self.make_key(letter, lambda value=letter: on_insert(value))
                 button.grid(row=row, column=offset+index*2, columnspan=2, sticky='nsew', padx=1, pady=1)
         for label, column, span, command, color in [
-            ('SPACE', 0, 10, lambda: on_insert(' '), '#5a2733'),
-            ('DEL', 10, 5, on_backspace, '#683440'),
-            ('CLEAR', 15, 5, on_clear, '#74404d'),
+            ('SPACE', 0, 10, lambda: on_insert(' '), '#000000'),
+            ('DEL', 10, 5, on_backspace, '#000000'),
+            ('CLEAR', 15, 5, on_clear, '#000000'),
         ]:
             button = self.make_key(label, command, color)
             button.grid(row=4, column=column, columnspan=span, sticky='nsew', padx=1, pady=1)
 
-    def make_key(self, label, command, color='#5a2733'):
+    def make_key(self, label, command, color='#000000'):
         button = tk.Button(self, text=label, command=command, font=('Arial', 13, 'bold'),
-                           bg=color, fg='#fff5f1', activebackground='#952c3a', activeforeground='white',
+                           bg=color, fg='white', activebackground='black', activeforeground='white',
                            width=1, height=1, padx=0, pady=0, bd=0, relief='flat',
-                           highlightthickness=1, highlightbackground='#81525e',
-                           highlightcolor='#f3ccd4', takefocus=False)
+                           highlightthickness=1, highlightbackground='white',
+                           highlightcolor='white', takefocus=False)
         self.keys[label] = button
         return button
