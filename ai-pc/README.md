@@ -6,9 +6,15 @@ This entire folder goes on the **AI PC**. It includes the React source and build
 
 ## Live attendance notifications
 
-Confirmed kiosk clock-ins and clock-outs show an employee notification at the right of the screen for 3 seconds, including TV fullscreen. A soft bell plays once when each notification appears. Rapid scans queue in order. Opening the dashboard does not replay existing records; duplicate scans and scans awaiting review stay silent.
+Confirmed kiosk and dashboard clock-ins and clock-outs show an employee notification at the right of the screen for 3 seconds, including TV fullscreen. A soft bell plays once when each notification appears. Rapid scans queue in order. Opening the dashboard does not replay existing records; duplicate scans and scans awaiting review stay silent.
 
 Bell sound is on by default. Click anywhere in the app once after opening it to let the browser enable audio (entering TV fullscreen also does this). Use **Bell on / Bell off** in the header or live board to mute it; the preference is saved in this browser. The TV/device must also have its audio output enabled.
+
+### One-click clock in and clock out
+
+In **Employees**, press **Clock in** on an OUT employee or **Clock out** on an IN employee. On the **Live board**, press the person's card to perform the same action, including in TV fullscreen. The server saves the current time, updates the board, and sends the notification with its bell. No date/time form is needed for a current clock action.
+
+Buttons pause while saving. If another browser or kiosk already changed the person's status, the server rejects the stale action and refreshes the status instead of toggling it back. Administrator clock actions are recorded in Change history and can deliberately clock out within the kiosk's repeat-scan cooldown. Kiosk cooldown remains in force. Old open sessions that require review still need correction through **History**, where historical edits retain their reason requirement.
 
 ## Step-by-step: first setup on the AI PC
 

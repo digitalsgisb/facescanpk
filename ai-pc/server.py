@@ -236,7 +236,7 @@ class Store:
             result.append(e)
         return result
 
-    def scan(self, data, device):
+    def scan(self, data, device, dashboard=False):
         event_id = data.get('event_id', '')
         if not re.fullmatch(r'[A-Za-z0-9-]{8,80}', event_id):
             raise Problem('A stable event_id is required for safe retries.')
@@ -244,7 +244,12 @@ class Store:
         if occurred > datetime.now(KL)+timedelta(minutes=5):
             raise Problem('Kiosk clock is ahead. Correct its clock before retrying.', 422)
         eid = str(data.get('employee_id', ''))
-        fingerprint = digest(json.dumps({'employee_id':eid,'timestamp':occurred.isoformat(),'device_id':device}, sort_keys=True))
+        details = {'employee_id':eid,'timestamp':occurred.isoformat(),'device_id':device}
+        if dashboard:
+            if data.get('action') not in ('IN', 'OUT'):
+                raise Problem('Choose clock in or clock out.')
+            details['dashboard_action'] = data['action']
+        fingerprint = digest(json.dumps(details, sort_keys=True))
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             old = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
@@ -255,17 +260,19 @@ class Store:
             e = db.execute('SELECT * FROM employees WHERE id=?', (eid,)).fetchone()
             if not e or not e['active']:
                 raise Problem('Employee is unknown or archived.', 422)
+            opened = db.execute('SELECT * FROM sessions WHERE employee_id=? AND time_out IS NULL', (eid,)).fetchone()
+            if dashboard and data['action'] != ('OUT' if opened else 'IN'):
+                raise Problem('Attendance already changed. Refresh and check the current status.', 409)
             cfg = self.settings(db)
             latest = db.execute('SELECT * FROM events WHERE employee_id=? ORDER BY occurred_at DESC LIMIT 1', (eid,)).fetchone()
             flags = []
             if latest and occurred < stamp(latest['occurred_at']):
                 result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'REVIEW',
                           'flags':['out_of_order_scan'], 'message':'Scan stored for review; current attendance was not changed.'}
-            elif latest and (occurred-stamp(latest['occurred_at'])).total_seconds() < cfg['cooldown_seconds']:
+            elif not dashboard and latest and (occurred-stamp(latest['occurred_at'])).total_seconds() < cfg['cooldown_seconds']:
                 result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'DUPLICATE',
                           'flags':[], 'message':'Already recorded recently; attendance unchanged.'}
             else:
-                opened = db.execute('SELECT * FROM sessions WHERE employee_id=? AND time_out IS NULL', (eid,)).fetchone()
                 if opened and (occurred-stamp(opened['time_in'])).total_seconds()>cfg['max_open_hours']*3600:
                     result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'REVIEW',
                               'flags':['stale_open_session'],'message':'Scan stored for review. An earlier session needs correction.'}
@@ -313,6 +320,9 @@ class Store:
                     result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'IN',
                               'session_id':sid,'work_date':str(wd),'flags':flags,'message':'Clock-in saved.'}
             result['timestamp'] = occurred.isoformat()
+            if dashboard:
+                result['source'] = 'dashboard'
+                result['reason'] = 'Administrator clicked Clock in' if data['action'] == 'IN' else 'Administrator clicked Clock out'
             db.execute('INSERT INTO events VALUES(?,?,?,?,?,?,?)',
                        (event_id,eid,device,occurred.isoformat(),now_iso(),fingerprint,json.dumps(result)))
             self.audit(db, device, 'scan_'+result['action'].lower(), eid, None, result)
@@ -442,6 +452,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'sessions':self.sessions(db, query)})
                 if scope != 'admin':
                     raise Problem('Administrator access required.',403)
+                if route == '/api/clock' and method == 'POST':
+                    data = self.body()
+                    # Server time is authoritative. Reuse the committed time for an idempotent retry.
+                    previous = db.execute('SELECT occurred_at FROM events WHERE id=?', (data.get('event_id', ''),)).fetchone()
+                    data['timestamp'] = previous['occurred_at'] if previous else now_iso()
+                    return self.send(self.store.scan(data, 'admin', dashboard=True))
                 if route == '/api/audit' and method == 'GET':
                     return self.send({'audit':[dict(r) for r in db.execute('SELECT * FROM audit ORDER BY id DESC LIMIT 200')]})
                 if route == '/api/review' and method == 'GET':

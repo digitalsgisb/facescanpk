@@ -176,6 +176,57 @@ class HttpTests(unittest.TestCase):
     def login(self):
         self.assertEqual(self.request('/api/auth/setup','POST',{'password':'test-password-long-enough'})[0],200)
 
+    def test_dashboard_clock_in_out_are_saved_audited_and_retry_safe(self):
+        self.login()
+        self.request('/api/employees','POST',{'id':'123','name':'Test','team':'N','schedule_id':'normal'})
+        body={'event_id':str(uuid.uuid4()),'employee_id':'123','action':'IN','timestamp':'2000-01-01T00:00:00+08:00'}
+        status,first=self.request('/api/clock','POST',body)
+        self.assertEqual(status,200)
+        self.assertEqual(first['action'],'IN')
+        self.assertEqual(first['source'],'dashboard')
+        self.assertNotEqual(first['timestamp'],body['timestamp'])
+        self.assertEqual(self.request('/api/clock','POST',body)[1],first)
+        self.assertEqual(self.request('/api/state')[1]['employees'][0]['status'],'IN')
+        # Deliberate administrator actions work within the kiosk repeat-scan cooldown.
+        status,last=self.request('/api/clock','POST',{**body,'event_id':str(uuid.uuid4()),'action':'OUT'})
+        self.assertEqual(status,200)
+        self.assertEqual(last['action'],'OUT')
+        state=self.request('/api/state')[1]
+        self.assertEqual(state['employees'][0]['status'],'OUT')
+        self.assertEqual(len(state['recent_events']),2)
+        audit=self.request('/api/audit')[1]['audit']
+        self.assertEqual(sum(row['actor']=='admin' and row['action'].startswith('scan_') for row in audit),2)
+
+    def test_dashboard_clock_rejects_stale_action_and_archived_employee(self):
+        self.login()
+        self.request('/api/employees','POST',{'id':'123','name':'Test','team':'N','schedule_id':'normal'})
+        body={'event_id':str(uuid.uuid4()),'employee_id':'123','action':'OUT'}
+        self.assertEqual(self.request('/api/clock','POST',body)[0],409)
+        self.assertEqual(self.request('/api/clock','POST',{**body,'action':'IN'})[0],200)
+        self.assertEqual(self.request('/api/clock','POST',{**body,'event_id':str(uuid.uuid4()),'action':'IN'})[0],409)
+        self.request('/api/clock','POST',{**body,'event_id':str(uuid.uuid4()),'action':'OUT'})
+        self.request('/api/employees/123','DELETE')
+        self.assertEqual(self.request('/api/clock','POST',{**body,'event_id':str(uuid.uuid4()),'action':'IN'})[0],422)
+
+    def test_dashboard_clock_is_admin_only(self):
+        body={'event_id':str(uuid.uuid4()),'employee_id':'123','action':'IN'}
+        self.assertEqual(self.request('/api/clock','POST',body)[0],401)
+        self.login()
+        token=self.request('/api/devices','POST',{'name':'Kiosk','scope':'kiosk'})[1]['token']
+        self.cookie=''
+        self.assertEqual(self.request('/api/clock','POST',body,{'Authorization':'Bearer '+token})[0],403)
+
+    def test_concurrent_dashboard_clicks_only_clock_in_once(self):
+        self.login()
+        self.request('/api/employees','POST',{'id':'123','name':'Test','team':'N','schedule_id':'normal'})
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results=list(pool.map(lambda _:self.request('/api/clock','POST',{
+                'event_id':str(uuid.uuid4()),'employee_id':'123','action':'IN'}),range(2)))
+        self.assertEqual(sorted(status for status,_ in results),[200,409])
+        state=self.request('/api/state')[1]
+        self.assertEqual(state['employees'][0]['status'],'IN')
+        self.assertEqual(len(state['recent_events']),1)
+
     def test_auth_and_employee_archive_audit(self):
         self.assertEqual(self.request('/api/employees')[0],401)
         self.login()

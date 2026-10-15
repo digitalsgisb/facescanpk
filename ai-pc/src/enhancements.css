@@ -18,3 +18,5 @@
 .tv-employee.in,.fit-all .tv-employee.in,.tv-employee.in strong,.tv-employee.in small,.tv-employee.in>span:last-of-type,.staff-status.in,.badge.green,.board-header .badge.green,.activity-icon.in{color:#05341c}
 .green-stat .stat-value,.green-stat .stat-value span,.green-stat .stat-label,.green-stat .stat-label svg,.green-stat small{color:#05341c}
 .tv-employee.in small{opacity:1}
+
+.staff-actions .quick-clock{font-weight:750}.staff-actions .clock-in{color:#11734c;background:#e8f5ee}.staff-actions .clock-out{color:#a22c3e;background:#faedf0}.quick-clock:disabled,.tv-employee:disabled{opacity:.55;cursor:wait}
