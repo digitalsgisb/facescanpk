@@ -6,6 +6,8 @@ Two device packages, one attendance system. The Raspberry Pi handles the camera,
 
 Choose the instructions for what you are doing:
 
+- **Ubuntu / SSH / Docker AI PC:** use [Docker setup over SSH](ai-pc/DOCKER-SSH.md). A desktop/browser on the AI PC is not required.
+
 1. **First connection / setting up the AI PC:** follow [AI PC setup](ai-pc/README.md#step-by-step-first-setup-on-the-ai-pc), then [Pi connection](raspberry-pi/README.md#step-by-step-connect-your-existing-pi).
 2. **Updating an existing installation:** follow [AI PC update](ai-pc/README.md#step-by-step-update-the-ai-pc), then [Pi update](raspberry-pi/README.md#step-by-step-update-the-pi). Update the PC first so the Pi can check the new API.
 3. **Putting the board on the HDMI screen:** follow [two-screen setup](raspberry-pi/README.md#step-by-step-two-screen-setup).

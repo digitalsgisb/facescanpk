@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+dist
+runtime
+__pycache__
+*.pyc
+*.sqlite3*
+*.db
+*.pem
+*.key
+data/employees.json
+data/photo-import-report.json
+preview
+*PRIVATE*

@@ -2,6 +2,8 @@
 
 This entire folder goes on the **AI PC**. It includes the React source and build, Python API, SQLite storage code, schedules, employee management and audited attendance corrections. The backend must run alongside the dashboard; copying React alone does not provide attendance storage or Pi connectivity.
 
+**Ubuntu AI PC accessible only through SSH?** Use the [Docker + SSH step-by-step guide](DOCKER-SSH.md). It includes Docker installation, private data transfer, terminal-only admin/token setup, persistent storage, updates and the exact Pi service commands. The Windows instructions below are for a non-Docker installation.
+
 ## Step-by-step: first setup on the AI PC
 
 1. **Download the correct ZIP.** Download [Smart-Attendance-AI-PC.zip](https://github.com/digitalsgisb/facescanpk/raw/refs/heads/main/downloads/Smart-Attendance-AI-PC.zip). Extract it to a permanent location, for example `C:\SmartAttendance\ai-pc`. The folder containing `server.py` is the app folder. The ready-made ZIP includes `dist/`, so you do not need Node.js just to run it.

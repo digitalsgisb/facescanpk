@@ -10,7 +10,8 @@ PI_FILES = ['README.md', 'face.py', 'kiosk_config.py', 'kiosk_keyboard.py', 'kio
             'test_kiosk_transport.py', 'test_kiosk_keyboard.py', '1.png']
 PC_FILES = ['README.md', 'server.py', 'requirements.txt', 'start.ps1', 'package.json',
             'package-lock.json', 'index.html', 'vite.config.js', 'test_server.py', 'import_history.py',
-            'data/employees.example.json']
+            'data/employees.example.json', 'Dockerfile', '.dockerignore', 'compose.yaml', '.env.example',
+            'manage.py', 'test_manage.py', 'install-docker-ubuntu.sh', 'DOCKER-SSH.md']
 
 
 def main():
