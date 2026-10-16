@@ -467,7 +467,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(raw)))
-        self.send_header('Cache-Control', 'no-store' if self.path.startswith('/api') else 'no-cache')
+        self.send_header('Cache-Control', 'no-store' if self.path.startswith(('/api','/uploads/')) else 'no-cache')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Frame-Options', 'DENY')
         self.send_header('Referrer-Policy', 'same-origin')
@@ -978,7 +978,13 @@ class Handler(BaseHTTPRequestHandler):
                 candidate=root/'index.html'
         if not candidate.resolve().is_relative_to(root.resolve()) or not candidate.is_file():
             raise Problem('Build the React app first (npm run build).',404)
-        self.send(candidate.read_bytes(),content_type=mimetypes.guess_type(candidate)[0] or 'application/octet-stream')
+        content_type={'/manifest.webmanifest':'application/manifest+json','/sw.js':'application/javascript'}.get(route)
+        raw=candidate.read_bytes()
+        if route=='/sw.js':
+            # Every new React build changes the worker version without reloading an open form.
+            version=hashlib.sha256((root/'index.html').read_bytes()).hexdigest()[:12]
+            raw=raw.replace(b'attendance-public-v1',('attendance-public-v1-'+version).encode())
+        self.send(raw,content_type=content_type or mimetypes.guess_type(candidate)[0] or 'application/octet-stream')
 
 
 def make_server(path, host='127.0.0.1', port=8765, seed=True):

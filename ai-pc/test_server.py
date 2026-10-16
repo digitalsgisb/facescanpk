@@ -516,6 +516,48 @@ class HttpTests(unittest.TestCase):
             token=self.request('/api/devices','POST',{'name':'Test '+scope,'scope':scope})[1]['token']
             self.assertEqual(self.request('/api/attention',headers={'Authorization':'Bearer '+token})[0],403)
 
+    def test_pwa_assets_are_public_installable_and_updated_with_the_react_build(self):
+        import hashlib,shutil
+        from server import BASE
+        static_base=Path(self.temp.name)/'static'
+        shutil.copytree(BASE/'public',static_base/'dist')
+        index=static_base/'dist/index.html'
+        index.write_text('<html>New React build</html>',encoding='utf-8')
+        with patch('server.BASE',static_base):
+            for path,content_type in [('/manifest.webmanifest','application/manifest+json'),('/sw.js','application/javascript')]:
+                with urllib.request.urlopen(self.base+path) as response:
+                    self.assertEqual(response.headers.get_content_type(),content_type)
+                    self.assertEqual(response.headers['Cache-Control'],'no-cache')
+                    content=response.read()
+                if path.endswith('webmanifest'):
+                    manifest=json.loads(content)
+                    self.assertEqual(manifest['display'],'standalone')
+                    self.assertEqual(manifest['scope'],'/')
+                    self.assertTrue({'192x192','512x512'}.issubset({icon['sizes'] for icon in manifest['icons']}))
+                else:
+                    version=hashlib.sha256(index.read_bytes()).hexdigest()[:12]
+                    self.assertIn(('attendance-public-v1-'+version).encode(),content)
+        self.assertEqual(self.request('/api/attention')[0],401)
+
+    def test_phone_photo_upload_remains_admin_only_and_photos_are_not_cached(self):
+        import base64,io
+        from PIL import Image
+        data=io.BytesIO()
+        Image.new('RGB',(1600,1200),'gray').save(data,format='JPEG')
+        body={'data':base64.b64encode(data.getvalue()).decode()}
+        self.assertEqual(self.request('/api/photos','POST',body)[0],401)
+        self.login()
+        response=self.request('/api/photos','POST',body)
+        self.assertEqual(response[0],200)
+        photo_url=response[1]['url']
+        request=urllib.request.Request(self.base+photo_url,headers={'Cookie':self.cookie})
+        with urllib.request.urlopen(request) as uploaded:
+            self.assertEqual(uploaded.headers['Cache-Control'],'no-store')
+            image=Image.open(io.BytesIO(uploaded.read()))
+            self.assertEqual(image.size,(600,450))
+        self.cookie=''
+        self.assertEqual(self.request(photo_url)[0],401)
+
     def test_manual_correction_requires_reason_and_preserves_audit(self):
         self.login()
         self.request('/api/employees','POST',{'id':'123','name':'Test','team':'N','schedule_id':'normal'})

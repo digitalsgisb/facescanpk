@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   border-radius: 0;
-  background: #faf7f7;
+  background: #f6f7f9;
 }
 .fit-all .board-stage { transform-origin: top left; }
 /* Department labels must not stretch employee cards in short groups. */
@@ -25,7 +25,7 @@
 .redesigned-board .board-group { padding: 0; margin: 0; gap: 0; border: 0; border-bottom: 1px solid #e1e6ed; border-radius: 0; background: #f7f9fc; }
 .redesigned-board .board-group:last-child { border-bottom: 0; }
 .board-group .tv-department-title { width: 126px; padding: 9px 12px; text-align: right; }
-.board-group .tv-department-title h3 { color: #402b2b; overflow-wrap: anywhere; }
+.board-group .tv-department-title h3 { color: #242a33; overflow-wrap: anywhere; }
 .board-group .tv-department-title small { display: block; color: #6d7b90; }
 .board-group .tv-department-title small b { color: #14863d; }
 .board-group-teams { flex: 1; min-width: 0; border-left: 1px solid #e1e6ed; }
@@ -65,6 +65,6 @@
 .redesigned-board.large-photo-board .tv-employee i{font-size:8px;padding:1px 4px}
 .redesigned-board.fit-all .board-stage-window{overflow:auto;overscroll-behavior:contain}
 .redesigned-board .tv-fit-footer{align-items:center;flex-wrap:wrap;min-height:38px;gap:8px;font-size:11px}
-.board-page-controls{display:flex;align-items:center;gap:9px}.board-page-controls button{padding:6px 10px;border-radius:5px;background:white;border:1px solid #e3d7da;font-size:11px;color:#67242b}.board-page-controls button:disabled{opacity:.4}.board-page-controls span{white-space:nowrap;font-size:11px}.redesigned-board .tv-fit-footer>span{font-size:10px}
+.board-page-controls{display:flex;align-items:center;gap:9px}.board-page-controls button{padding:6px 10px;border-radius:5px;background:white;border:1px solid #dce1e8;font-size:11px;color:#343e4b}.board-page-controls button:disabled{opacity:.4}.board-page-controls span{white-space:nowrap;font-size:11px}.redesigned-board .tv-fit-footer>span{font-size:10px}
 .redesigned-board .board-totals{gap:12px}.redesigned-board.tv-mode .board-header{animation:none;background-size:100% 100%}.redesigned-board.tv-mode .board-header::after{animation:none}
 @media(max-width:650px){.redesigned-board.large-photo-board .board-group .tv-department-title{width:100px}.large-photo-board .board-stage{--board-card-width:190px}.clock-admin .clock-person .clock-face{width:52px;height:52px}}

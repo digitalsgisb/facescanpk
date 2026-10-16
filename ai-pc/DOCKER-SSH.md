@@ -160,9 +160,9 @@ Local Docker image execution could not be checked in the Windows development wor
 
 ## Existing Cloudflare Tunnel
 
-Add a published application hostname such as `attendance.sugidigital.org` to your existing tunnel. Set service type HTTP and the service address to `http://localhost:3800` if the connector runs directly on this AI PC or uses Docker host networking. A connector in a separate Docker bridge network needs a reachable host address instead, such as `http://AI_PC_IP:3800`. Leave the public hostname's path field blank. Keep existing routes for other apps unchanged.
+The current application hostname is **https://pkattendance.sugidigital.org/**. Keep that existing tunnel route when updating. Its service type is HTTP and the upstream is `http://localhost:3800` if the connector runs directly on this AI PC or uses Docker host networking. A connector in a separate Docker bridge network needs a reachable host address instead, such as `http://AI_PC_IP:3800`. Leave the public hostname's path field blank. Keep existing routes for other apps unchanged.
 
-Use `https://attendance.sugidigital.org` for the browser once the route exists. The Pi Python kiosk can continue using `http://AI_PC_IP:3800` on the company LAN so scans do not depend on the internet/tunnel. If Cloudflare Access protects the browser hostname, the current kiosk does not send Access service-token headers; keep its direct LAN API connection.
+Use `https://pkattendance.sugidigital.org/` on desktop and phone. After pulling/rebuilding the AI PC, the phone can install the PWA and upload profile photos; see the [phone guide](README.md#phone-app-and-photo-uploads-pwa). The Pi Python kiosk can continue using `http://AI_PC_IP:3800` on the company LAN so scans do not depend on the internet/tunnel. If Cloudflare Access protects the browser hostname, the current kiosk does not send Access service-token headers; keep its direct LAN API connection. The PWA does not cache authenticated API responses or uploaded employee photos.
 
 ### Changing an existing Docker installation from the old port
 

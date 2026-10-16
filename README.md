@@ -139,6 +139,8 @@ Open **Control centre** for separate Conversion and Roll Making Team A/B/N hours
 
 The overview's **Needs attention** card opens a breakdown of missing working hours, flagged/old open attendance sessions and pending scan reviews across all dates. Each issue explains the problem and opens the affected employee or exact record; links also select the correct attendance-log dates. See the [issue review guide](ai-pc/README.md#needs-attention-see-the-issue-and-open-the-fix).
 
+The app is PWA-ready at **https://pkattendance.sugidigital.org/** after the AI PC pull/rebuild. Install it from your phone's browser, then use **Employees → Profile → Choose photo / Take photo → Save changes**. Large phone photos are resized automatically. The original colour logo and white workspace stay, with neutral popup/overlay styling and stable live refreshes. See the [phone installation and upload guide](ai-pc/README.md#phone-app-and-photo-uploads-pwa).
+
 ## Admin attendance controls and TV photos
 
 Open **Clock in / out** in the sidebar or **Admin controls** in the TV header. Enter the administrator password to unlock individual and batch clock actions for 30 minutes. The TV cards only show details. Select employees and use **Clock in selected / Clock out selected** for a batch. See the [admin controls guide](ai-pc/README.md#admin-clock-in--out-including-batches).

@@ -2,10 +2,12 @@ import React, {useEffect, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {X} from 'lucide-react';
 import {productionSection} from './organisation.js';
+import {useModalSurface} from './modal-surface.js';
 
 const clockTime = value => value ? new Intl.DateTimeFormat('en-MY', {timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)) + ' MYT' : 'No open session';
 
 export function EmployeeDetails({employee, onClose}) {
+  useModalSurface(!!employee);
   const [target, setTarget] = useState(() => document.fullscreenElement || document.body);
   const [broken, setBroken] = useState(false);
   useEffect(() => {

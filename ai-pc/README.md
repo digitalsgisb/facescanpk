@@ -4,6 +4,23 @@ This entire folder goes on the **AI PC**. It includes the React source and build
 
 **Ubuntu AI PC accessible only through SSH?** Use the [Docker + SSH step-by-step guide](DOCKER-SSH.md). It includes Docker installation, private data transfer, terminal-only admin/token setup, persistent storage, updates and the exact Pi service commands. The Windows instructions below are for a non-Docker installation.
 
+## Phone app and photo uploads (PWA)
+
+Current browser address: **https://pkattendance.sugidigital.org/**. Pull/rebuild the AI PC application first; the running app only gets these files after deployment. The Pi kiosk needs no update for this feature.
+
+1. Open that address on your phone and sign in with the administrator password.
+2. **Android / Chrome:** use the browser menu's **Install app / Add to Home screen**, or **System settings → Install attendance app** when the browser offers it. **iPhone / Safari:** **Share → Add to Home Screen → Add**.
+3. Open **Employees → Profile** or an employee's missing-hours issue. **Choose photo** opens the photo library; **Take photo** requests the phone's camera/selfie picker. Browser camera behaviour depends on the phone. You can upload photos without installing the app too.
+4. Phone images up to 25 MB are resized in the browser before uploading. JPEG, PNG and WebP work; HEIC/HEIF requires browser decoding support, otherwise choose JPEG or take a new photo. The server keeps a corrected-orientation JPEG up to 600 pixels on its longest side. Press **Save changes** to attach the uploaded photo to the employee.
+
+Installation requires a trusted HTTPS address (localhost is allowed only for development); an ordinary HTTP LAN IP does not provide phone PWA installation. See [browser installation requirements](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable). Your configured HTTPS hostname can be used from a phone that can reach it; a direct LAN address needs the same workplace network. Existing administrator authentication and photo permissions still apply.
+
+The worker caches only public icons/assets and a connection-help page. API replies, authentication, attendance actions and employee photo uploads are never stored in its offline cache, and uploads are sent with `Cache-Control: no-store`. There is no offline attendance queue in the browser. Reopening the app fetches fresh HTML; a waiting worker update is applied from **System settings → Update app** after you save edits. Updates never automatically reload an open profile. The worker cache version follows the compiled React index, so a rebuilt application updates the worker as well.
+
+### Stable popups and the charcoal theme
+
+Dialogs, overlays, footers, filters, hover states and toasts use the current neutral palette. The original company logo remains in colour, while green/red still show attendance states and warnings retain their meaning. The sidebar's decorative layers pause while a dialog is open, the background blur is removed, and page scrolling locks without a width jump. Live attention-list refreshes retain the existing rows instead of replacing them with a loading screen. Phone form inputs use 16-pixel text to avoid automatic input zoom in mobile browsers.
+
 ## Live attendance notifications
 
 Confirmed kiosk and dashboard clock-ins and clock-outs show an employee notification at the right of the screen for 3 seconds, including TV fullscreen. A soft bell plays once when each notification appears. Rapid scans queue in order. Opening the dashboard does not replay existing records; duplicate scans and scans awaiting review stay silent.

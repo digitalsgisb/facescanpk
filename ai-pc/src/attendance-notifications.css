@@ -1,12 +1,12 @@
 .attendance-notifications{position:fixed;top:90px;right:24px;width:min(380px,calc(100vw - 32px));z-index:1000;pointer-events:none;font-family:inherit}
 .attendance-notice{--notice-color:#11734c;position:relative;overflow:hidden;border:1px solid #dce6e0;border-radius:18px;background:#fff;color:#26312c;box-shadow:0 18px 60px #172b3430;pointer-events:auto;animation:attendance-arrive .28s ease-out}
-.attendance-notice.is-out{--notice-color:#a22c3e;border-color:#eedde0}
+.attendance-notice.is-out{--notice-color:#c4252d;border-color:#fff0f1}
 .attendance-notice-heading{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;color:#66716b}
 .attendance-notice-heading>span{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:750;letter-spacing:1.6px}
 .attendance-notice-heading button{display:flex;align-items:center;justify-content:center;border:0;background:transparent;padding:6px;border-radius:6px;color:#66716b;cursor:pointer}
 .attendance-notice-heading button:hover{background:#f3f5f4}
 .attendance-notice-person{display:flex;align-items:center;gap:13px;padding:16px}
-.attendance-notice-photo{display:flex;align-items:center;justify-content:center;flex:0 0 62px;height:62px;border-radius:16px;background:#f3edef;color:#7e2137;font-size:20px;font-weight:750;overflow:hidden}
+.attendance-notice-photo{display:flex;align-items:center;justify-content:center;flex:0 0 62px;height:62px;border-radius:16px;background:#f6f7f9;color:#343e4b;font-size:20px;font-weight:750;overflow:hidden}
 .attendance-notice-photo img{height:100%;width:100%;object-fit:cover}
 .attendance-notice-person>div:last-child{min-width:0}
 .attendance-notice-person strong{display:block;font-size:21px;line-height:1.2;overflow-wrap:anywhere}
