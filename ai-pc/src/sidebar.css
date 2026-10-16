@@ -1,0 +1,18 @@
+/* Scroll only the menu, keeping the brand and account controls reachable. */
+.sidebar{overflow:clip;height:100vh;height:100dvh;min-height:0}
+.sidebar>.brand,.sidebar>.site-label,.sidebar>.sidebar-bottom{flex-shrink:0}
+.sidebar nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#8993a3 #ffffff0a;padding-right:8px;margin-right:-8px;touch-action:pan-y}
+.sidebar nav button{flex-shrink:0}
+.sidebar nav::-webkit-scrollbar{width:6px}
+.sidebar nav::-webkit-scrollbar-track{background:#ffffff0a;border-radius:8px}
+.sidebar nav::-webkit-scrollbar-thumb{background:#8993a3;border-radius:8px}
+.sidebar nav::-webkit-scrollbar-thumb:hover{background:#c6cbd3}
+.sidebar .sidebar-bottom{margin-top:12px;padding-top:12px;border-top:1px solid #ffffff15}
+.sidebar-backdrop,.sidebar-close{display:none}
+@media(max-height:720px){.sidebar .brand{padding-bottom:18px}.sidebar .site-label{padding-bottom:12px}.sidebar .sidebar-bottom{margin-top:8px;padding-top:8px}}
+@media(max-width:650px){
+  .sidebar.open{box-shadow:10px 0 35px #0004;padding-top:max(28px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom))}
+  .sidebar-backdrop{display:block;position:fixed;inset:0;z-index:45;width:100%;height:100%;background:#0c0f1480;touch-action:none;cursor:default}
+  .sidebar .sidebar-close{display:grid;position:absolute;right:6px;top:4px;width:28px;height:28px;color:#dce1e8}
+}
+
