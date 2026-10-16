@@ -25,7 +25,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 BASE = Path(__file__).resolve().parent
 KL = timezone(timedelta(hours=8), 'Asia/Kuala_Lumpur')
 SESSION_COOKIE_AGE = 400 * 24 * 3600  # Browser persistence, renewed on authenticated requests.
-FIELDS = ('id', 'name', 'nickname', 'department', 'position', 'line', 'team', 'photo_url', 'schedule_id', 'production_section', 'office_department', 'active')
+FIELDS = ('id', 'name', 'nickname', 'department', 'position', 'line', 'team', 'photo_url', 'schedule_id', 'production_section', 'office_department', 'checksheet_group', 'active')
 TEMPLATES = [
     ('normal', 'Normal working hours', '07:45', '17:40', 0),
     ('day', 'Day shift', '08:00', '16:15', 0),
@@ -165,7 +165,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS attendance_access (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
             ''')
             columns={r['name'] for r in db.execute('PRAGMA table_info(employees)')}
-            for column in ('production_section','office_department'):
+            for column in ('production_section','office_department','checksheet_group'):
                 if column not in columns:
                     db.execute(f"ALTER TABLE employees ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
             if 'scope' not in {r['name'] for r in db.execute('PRAGMA table_info(assignments)')}:
@@ -321,6 +321,10 @@ class Store:
             raise Problem('Select team A, B, N or unassigned.')
         if e.get('production_section','') not in ('','CONVERSION','ROLL MAKING'):
             raise Problem('Choose Conversion, Roll Making or automatic section.')
+        if e.get('checksheet_group','') not in ('','fc1','fc2','fc3'):
+            raise Problem('Choose FC Line 1, FC Line 2, FC Line 3 or unassigned.')
+        if e.get('checksheet_group') and ((e.get('department') or '').strip().upper() != 'PRODUCTION' or (e.get('line') or '').strip().upper() != 'FC'):
+            raise Problem('FC Checksheet assignments require Production department and FC line.')
         for f in FIELDS[:-1]:
             if e.get(f) is not None and (not isinstance(e[f], str) or len(e[f]) > 2000):
                 raise Problem('Employee field is invalid or too long.')

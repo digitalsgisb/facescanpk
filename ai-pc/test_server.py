@@ -26,6 +26,21 @@ class AttendanceTests(unittest.TestCase):
         assert Path(self.temp.name).resolve().is_relative_to(TEST_ROOT.resolve())
         self.temp.cleanup()
 
+    def test_checksheet_assignment_keeps_fc_tv_group_and_survives_restart(self):
+        employee={'id':'FC1','name':'FC One','department':'PRODUCTION','line':'FC','checksheet_group':'fc1'}
+        with self.store.connect() as db:
+            self.store.validate_employee(db,employee)
+            self.store.insert_employee(db,employee)
+        restarted=Store(self.store.path,seed=False)
+        with restarted.connect() as db:
+            saved=next(e for e in restarted.employees(db) if e['id']=='FC1')
+            self.assertEqual(saved['checksheet_group'],'fc1')
+            self.assertEqual(saved['line'],'FC')
+            with self.assertRaises(Problem):
+                restarted.validate_employee(db,{**employee,'checksheet_group':'invalid'})
+            with self.assertRaises(Problem):
+                restarted.validate_employee(db,{**employee,'line':'MF'})
+
     def scan(self,eid,stamp,event=None,device='pi-one'):
         return self.store.scan({'event_id':event or str(uuid.uuid4()),'employee_id':eid,'timestamp':stamp},device)
 
