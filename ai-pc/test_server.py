@@ -211,6 +211,7 @@ class HttpTests(unittest.TestCase):
 
     def test_dashboard_clock_in_out_are_saved_audited_and_retry_safe(self):
         self.login()
+        self.assertEqual(self.request('/api/auth/unlock-attendance','POST',{'password':'test-password-long-enough'})[0],200)
         self.request('/api/employees','POST',{'id':'123','name':'Test','team':'N','schedule_id':'normal'})
         body={'event_id':str(uuid.uuid4()),'employee_id':'123','action':'IN','timestamp':'2000-01-01T00:00:00+08:00'}
         status,first=self.request('/api/clock','POST',body)
@@ -232,6 +233,7 @@ class HttpTests(unittest.TestCase):
 
     def test_dashboard_clock_rejects_stale_action_and_archived_employee(self):
         self.login()
+        self.assertEqual(self.request('/api/auth/unlock-attendance','POST',{'password':'test-password-long-enough'})[0],200)
         self.request('/api/employees','POST',{'id':'123','name':'Test','team':'N','schedule_id':'normal'})
         body={'event_id':str(uuid.uuid4()),'employee_id':'123','action':'OUT'}
         self.assertEqual(self.request('/api/clock','POST',body)[0],409)
@@ -249,8 +251,66 @@ class HttpTests(unittest.TestCase):
         self.cookie=''
         self.assertEqual(self.request('/api/clock','POST',body,{'Authorization':'Bearer '+token})[0],403)
 
+    def test_clock_controls_require_password_and_can_be_locked(self):
+        self.login()
+        body={'employee_id':'123','action':'IN','event_id':str(uuid.uuid4())}
+        self.assertFalse(self.request('/api/clock-access')[1]['unlocked'])
+        self.assertEqual(self.request('/api/clock','POST',body)[0],403)
+        self.assertEqual(self.request('/api/clock/batch','POST',{})[0],403)
+        self.assertEqual(self.request('/api/auth/unlock-attendance','POST',{'password':'wrong'})[0],401)
+        self.assertEqual(self.request('/api/auth/unlock-attendance','POST',{'password':'test-password-long-enough'})[0],200)
+        self.assertTrue(self.request('/api/clock-access')[1]['unlocked'])
+        self.request('/api/clock-access','DELETE')
+        self.assertFalse(self.request('/api/clock-access')[1]['unlocked'])
+        self.assertEqual(self.request('/api/clock','POST',body)[0],403)
+
+    def test_batch_clock_results_retry_and_fixed_action(self):
+        self.login()
+        self.request('/api/auth/unlock-attendance','POST',{'password':'test-password-long-enough'})
+        for eid in ('111','222','333'):
+            self.request('/api/employees','POST',{'id':eid,'name':'Test '+eid,'team':'N','schedule_id':'normal'})
+        self.request('/api/clock','POST',{'employee_id':'222','action':'IN','event_id':str(uuid.uuid4())})
+        self.request('/api/employees/333','DELETE')
+        body={'batch_id':str(uuid.uuid4()),'action':'IN','employee_ids':['111','222','333']}
+        status,response=self.request('/api/clock/batch','POST',body)
+        self.assertEqual(status,200)
+        self.assertEqual([r['status'] for r in response['results']],['saved','skipped','error'])
+        self.assertEqual(self.request('/api/clock/batch','POST',body)[1],response)
+        state=self.request('/api/state')[1]
+        self.assertEqual(len(state['recent_events']),3)
+        self.assertEqual(self.request('/api/clock/batch','POST',{**body,'employee_ids':['111','111']})[0],400)
+        self.assertEqual(self.request('/api/clock/batch','POST',{**body,'employee_ids':[]})[0],400)
+        self.assertEqual(self.request('/api/clock/batch','POST',{**body,'action':'TOGGLE'})[0],400)
+        status,response=self.request('/api/clock/batch','POST',{**body,'batch_id':str(uuid.uuid4()),'action':'OUT','employee_ids':['111','222']})
+        self.assertEqual(status,200)
+        self.assertTrue(all(r['status']=='saved' for r in response['results']))
+        self.assertTrue(all(e['status']=='OUT' for e in self.request('/api/state')[1]['employees']))
+
+    def test_batch_retry_preserves_originally_skipped_result(self):
+        self.login()
+        self.request('/api/auth/unlock-attendance','POST',{'password':'test-password-long-enough'})
+        self.request('/api/employees','POST',{'id':'111','name':'Test','team':'N','schedule_id':'normal'})
+        body={'batch_id':str(uuid.uuid4()),'action':'OUT','employee_ids':['111']}
+        original=self.request('/api/clock/batch','POST',body)[1]
+        self.assertEqual(original['results'][0]['status'],'skipped')
+        # A skipped batch action must not trigger kiosk cooldown or block a real arrival.
+        result=self.server.store.scan({'employee_id':'111','timestamp':original['results'][0]['timestamp'],'event_id':str(uuid.uuid4())},'test-kiosk')
+        self.assertEqual(result['action'],'IN')
+        self.assertEqual(self.request('/api/clock/batch','POST',body)[1],original)
+        self.assertEqual(self.request('/api/state')[1]['employees'][0]['status'],'IN')
+
+    def test_attendance_unlock_expires_without_expiring_login(self):
+        import time
+        self.login()
+        self.request('/api/auth/unlock-attendance','POST',{'password':'test-password-long-enough'})
+        with patch('server.time.time',return_value=time.time()+1801):
+            self.assertFalse(self.request('/api/clock-access')[1]['unlocked'])
+            self.assertEqual(self.request('/api/clock/batch','POST',{})[0],403)
+            self.assertTrue(self.request('/api/auth/status')[1]['signed_in'])
+
     def test_concurrent_dashboard_clicks_only_clock_in_once(self):
         self.login()
+        self.assertEqual(self.request('/api/auth/unlock-attendance','POST',{'password':'test-password-long-enough'})[0],200)
         self.request('/api/employees','POST',{'id':'123','name':'Test','team':'N','schedule_id':'normal'})
         with ThreadPoolExecutor(max_workers=2) as pool:
             results=list(pool.map(lambda _:self.request('/api/clock','POST',{

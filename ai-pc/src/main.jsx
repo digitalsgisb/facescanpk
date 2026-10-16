@@ -7,6 +7,7 @@ import './tv.css';
 import {EmployeeGroups,LiveBoard,departmentOrder} from './workforce.jsx';
 import './enhancements.css';
 import './polish.css';
+import {ClockControls} from './clock-controls.jsx';
 import {EmployeeDetails} from './employee-details.jsx';
 import {useAttendanceNotifications, AttendanceNotifications, AttendanceSound} from './attendance-notifications.jsx';
 
@@ -44,6 +45,7 @@ function App(){
   const notifications=useAttendanceNotifications(state,auth?.signed_in);
   const clockLock=useRef(false);
   const [personDetails,setPersonDetails]=useState(null);
+  const [clockUnlocked,setClockUnlocked]=useState(false),[clockInitialId,setClockInitialId]=useState(null);
   const notify=message=>{setToast(message);setTimeout(()=>setToast(''),4500)};
   const refresh=useCallback(async()=>{
     try{const data=await api('/state');setState(data);setError('');}catch(e){if(e.status===401){setAuth({signed_in:false,setup_required:false});setState(null)}setError(e.message)}
@@ -51,6 +53,7 @@ function App(){
   const refreshHistory=useCallback(async()=>{
     try{const [h,r]=await Promise.all([api(`/attendance?from=${from}&to=${to}`),api('/review')]);setSessions(h.sessions);setReview(r.events)}catch(e){setError(e.message)}
   },[from,to]);
+  useEffect(()=>{if(!auth?.signed_in)setClockUnlocked(false)},[auth?.signed_in]);
   useEffect(()=>{api('/auth/status').then(setAuth).catch(e=>setError(e.message))},[]);
   useEffect(()=>{
     if(!auth?.signed_in)return;
@@ -77,11 +80,12 @@ function App(){
   const filtered=(state?.employees||[]).filter(e=>(showArchived?!e.active:e.active)&&(!search||[e.name,e.nickname,e.id,e.department,e.line,e.position].some(v=>v?.toLowerCase().includes(search.toLowerCase())))&&(department==='all'||(e.department||'Unassigned')===department)&&(team==='all'||(e.team||'Unassigned')===team)&&(status==='all'||e.status===status));
   async function clockAttendance(employee){
     if(clockLock.current||busy||!employee.active)return;
+    if(!clockUnlocked){setClockInitialId(employee.id);navigate('clock');return;}
     clockLock.current=true;
     try{
       const result=await mutate('/clock','POST',{employee_id:employee.id,action:employee.status==='IN'?'OUT':'IN',event_id:Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')});
       if(!['IN','OUT'].includes(result.action))setError(result.message);
-    }catch(e){await refresh();setError(e.message);}
+    }catch(e){await refresh();setError(e.message);if(e.status===403){setClockUnlocked(false);setClockInitialId(employee.id);navigate('clock');}}
     finally{clockLock.current=false;}
   }
   async function openAttendance(employee){
@@ -90,7 +94,7 @@ function App(){
     setDialog({type:'correction',manual:!session,session,employee});
   }
   const navigate=p=>{setPage(p);setMobile(false);setSearch('');setDepartment('all');setTeam('all');setStatus('all')};
-  const nav=[['overview','Overview',LayoutDashboard],['board','Live board',Monitor],['employees','Employees',Users],['roster','Schedules & roster',CalendarDays],['attendance','Attendance log',Clock3],['audit','Change history',FileClock],['settings','System settings',Settings2]];
+  const nav=[['overview','Overview',LayoutDashboard],['board','Live board',Monitor],['clock','Clock in / out',Clock3],['employees','Employees',Users],['roster','Schedules & roster',CalendarDays],['attendance','Attendance log',Clock3],['audit','Change history',FileClock],['settings','System settings',Settings2]];
 
   if(!auth?.signed_in)return <div className="login"><div className="login-brand"><img src="/1.png" alt="Sugihara"/><span>Digital Attendance</span></div><section className="login-card"><div className="eyebrow">PORT KLANG · E-ATTENDANCE</div><h1>{auth?.setup_required?'Your people.\nOne clear view.':'Welcome back.'}</h1><p>{auth?.setup_required?'Create an administrator password to start managing your workforce.':'Sign in to your attendance workspace.'}</p><form onSubmit={login}><Field label={auth?.setup_required?'Create password (12+ characters)':'Administrator password'}><input type="password" autoComplete={auth?.setup_required?'new-password':'current-password'} minLength={auth?.setup_required?12:1} value={password} onChange={e=>setPassword(e.target.value)} required/></Field>{error&&<div className="inline-error">{error}</div>}<button className="primary" disabled={busy||!auth}>{busy?'Please wait…':auth?.setup_required?'Set up workspace':'Sign in'}<ArrowUpRight size={18}/></button></form><div className="login-foot"><ShieldCheck size={16}/> Company attendance workspace</div></section><p className="login-caption">A connected workplace, around the clock.</p></div>;
   if(!state)return <div className="loading"><RefreshCw className="spin"/>Loading your workspace…{error&&<p>{error}</p>}</div>;
@@ -99,7 +103,7 @@ function App(){
     <main><header className="topbar"><div className="breadcrumbs"><button className="mobile-toggle icon-button" aria-label="Open navigation" onClick={()=>setMobile(!mobile)}><Menu size={20}/></button><span>Port Klang</span><ChevronRight size={14}/><strong>{nav.find(n=>n[0]===page)?.[1]}</strong></div><div className="topbar-right"><AttendanceSound notifications={notifications}/><span className="timezone">MYT · UTC+8</span><span className="date-pill"><CalendarDays size={15}/>{dateLabel(today())}</span><div className="tiny-avatar">AD</div></div></header>
     <div className="page" key={page}>
       {error&&<div className="error-banner"><AlertTriangle size={18}/>{error}<button className="icon-button" onClick={()=>setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
-      <div className="page-heading"><div><div className="eyebrow">{page==='overview'?'WORKFORCE AT A GLANCE':'YOUR WORKPLACE'}</div><h1>{({overview:'Attendance overview',board:'Live attendance board',employees:'Your people',roster:'Working hours & roster',attendance:'Attendance log',audit:'Every change, accounted for',settings:'Workspace settings'})[page]}</h1><p>{({overview:'A clear picture of who’s here, across every shift.',board:'A live view of your people, grouped by department and production line.',employees:'Keep employee details, photos and working hours in one place.',roster:'A and B are teams. Their working hours can change with the roster.',attendance:'Every confirmed clock-in and clock-out, including overnight shifts.',audit:'Track employee edits, schedule changes and attendance corrections.',settings:'Connect your kiosks, tune attendance rules and protect your records.'})[page]}</p></div><div className="heading-actions">{page==='employees'&&<button className="primary" onClick={()=>setDialog({type:'employee'})}><Plus size={17}/>Add employee</button>}{page==='overview'&&<><button className="secondary" onClick={()=>navigate('attendance')}><FileClock size={17}/>View attendance log</button><button className="primary" onClick={()=>navigate('employees')}>Manage employees<ArrowUpRight size={17}/></button></>}{page==='attendance'&&<button className="primary" onClick={()=>setDialog({type:'correction',manual:true})}><Plus size={17}/>Manual entry</button>}{page==='roster'&&<button className="primary" onClick={()=>setDialog({type:'assignment'})}><Plus size={17}/>Assign working hours</button>}</div></div>
+      <div className="page-heading"><div><div className="eyebrow">{page==='overview'?'WORKFORCE AT A GLANCE':'YOUR WORKPLACE'}</div><h1>{({overview:'Attendance overview',board:'Live attendance board',clock:'Admin clock in / out',employees:'Your people',roster:'Working hours & roster',attendance:'Attendance log',audit:'Every change, accounted for',settings:'Workspace settings'})[page]}</h1><p>{({overview:'A clear picture of who’s here, across every shift.',board:'A live view of your people, grouped by department and production line.',clock:'Individual and batch attendance controls, protected by your administrator password.',employees:'Keep employee details, photos and working hours in one place.',roster:'A and B are teams. Their working hours can change with the roster.',attendance:'Every confirmed clock-in and clock-out, including overnight shifts.',audit:'Track employee edits, schedule changes and attendance corrections.',settings:'Connect your kiosks, tune attendance rules and protect your records.'})[page]}</p></div><div className="heading-actions">{page==='employees'&&<button className="primary" onClick={()=>setDialog({type:'employee'})}><Plus size={17}/>Add employee</button>}{page==='overview'&&<><button className="secondary" onClick={()=>navigate('attendance')}><FileClock size={17}/>View attendance log</button><button className="primary" onClick={()=>navigate('employees')}>Manage employees<ArrowUpRight size={17}/></button></>}{page==='attendance'&&<button className="primary" onClick={()=>setDialog({type:'correction',manual:true})}><Plus size={17}/>Manual entry</button>}{page==='roster'&&<button className="primary" onClick={()=>setDialog({type:'assignment'})}><Plus size={17}/>Assign working hours</button>}</div></div>
 
       {page==='overview'&&<>
         <div className="stats-grid"><Stat label="ACTIVE EMPLOYEES" value={active.length} detail="Across all departments" icon={Users}/><Stat label="CURRENTLY IN" value={inside.length} detail="Includes open overnight shifts" icon={CheckCircle2} green/><Stat label="CURRENTLY OUT" value={active.length-inside.length} detail="No open attendance session" icon={LogOut}/><Stat label="NEEDS ATTENTION" value={flagged.length+review.length+unassigned.length} detail={`${unassigned.length} missing working hours`} icon={AlertTriangle} amber/></div>
@@ -109,7 +113,9 @@ function App(){
         <section className="shift-strip"><div><span className="eyebrow">BUILT FOR A 24-HOUR WORKPLACE</span><h2>One workplace. Every shift.</h2></div><div className="shift-mini"><Sun size={19}/><div>Normal hours<small>07:45 – 17:40</small></div></div><div className="shift-mini"><Sun size={19}/><div>Day shift<small>08:00 – 16:15 / 20:00</small></div></div><div className="shift-mini"><Moon size={19}/><div>Night shift<small>16:15 – 00:30 / 20:00 – 08:00</small></div></div></section>
       </>}
 
-      {page==='board'&&<LiveBoard employees={active} live={live} onDetails={employee=>setPersonDetails(employee.id)} soundControl={<AttendanceSound notifications={notifications}/>}/>}
+      {page==='clock'&&<ClockControls employees={active} api={api} unlocked={clockUnlocked} onUnlocked={setClockUnlocked} onRefresh={()=>Promise.all([refresh(),refreshHistory()])} onEdit={openAttendance} initialId={clockInitialId}/>}
+      {page==='board'&&<div className="board-admin-entry"><div><strong>Need to clock someone in or out?</strong><p>Open the password-protected admin controls for individual and batch actions.</p></div><button className="primary" onClick={()=>{setClockInitialId(null);navigate('clock')}}><ShieldCheck size={17}/>Admin clock controls</button></div>}
+      {page==='board'&&<LiveBoard employees={active} live={live} detailsOpen={!!personDetails} onAdminControls={()=>{setClockInitialId(null);navigate('clock')}} onDetails={employee=>setPersonDetails(employee.id)} soundControl={<AttendanceSound notifications={notifications}/>}/>}
 
       {page==='employees'&&<section className="card employee-card"><div className="tabs-row"><div className="tabs"><button className={!showArchived?'active':''} onClick={()=>setShowArchived(false)}>Active employees <span>{active.length}</span></button><button className={showArchived?'active':''} onClick={()=>setShowArchived(true)}>Archived <span>{state.employees.length-active.length}</span></button></div><button className="text-button" onClick={()=>exportCsv(filtered.map(e=>({ID:e.id,Name:e.name,Nickname:e.nickname,Department:e.department,Position:e.position,Line:e.line,Team:e.team,Schedule:e.effective_schedule?.name||'Unassigned',Status:e.status})), 'employees.csv')}><ArrowDownToLine size={16}/>Export</button></div><div className="filters"><div className="search"><Search size={18}/><input aria-label="Search employees" placeholder="Search by name, ID or production line…" value={search} onChange={e=>setSearch(e.target.value)}/></div><select aria-label="Filter department" value={department} onChange={e=>setDepartment(e.target.value)}><option value="all">All departments</option>{departments.map(d=><option key={d}>{d}</option>)}</select><select aria-label="Filter team" value={team} onChange={e=>setTeam(e.target.value)}><option value="all">All teams</option>{['A','B','N','Unassigned'].map(t=><option key={t} value={t}>{t==='Unassigned'?t:'Team '+t}</option>)}</select><select aria-label="Filter attendance status" value={status} onChange={e=>setStatus(e.target.value)}><option value="all">Any status</option><option value="IN">Currently in</option><option value="OUT">Currently out</option></select></div><EmployeeGroups employees={filtered} onEdit={e=>setDialog({type:'employee',employee:e})} onAttendance={openAttendance} onClock={clockAttendance} busy={busy}/><footer className="table-footer">Showing {filtered.length} {showArchived?'archived':'active'} employees<span>Changes are saved in your workspace</span></footer></section>}
 

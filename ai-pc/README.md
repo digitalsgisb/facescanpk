@@ -10,11 +10,23 @@ Confirmed kiosk and dashboard clock-ins and clock-outs show an employee notifica
 
 Bell sound is on by default. Click anywhere in the app once after opening it to let the browser enable audio (entering TV fullscreen also does this). Use **Bell on / Bell off** in the header or live board to mute it; the preference is saved in this browser. The TV/device must also have its audio output enabled.
 
-### One-click clock in and clock out
+### Admin clock in / out, including batches
 
-In **Employees**, press **Clock in** on an OUT employee or **Clock out** on an IN employee. The **Live board is view only**: pressing a card opens employee details, including in TV fullscreen. It cannot clock a person in/out or edit employee data. The server saves the current time, updates the board, and sends the notification with its bell. No date/time form is needed for a current clock action.
+Open **Clock in / out** in the sidebar, or press **Admin controls** on the TV header. The header button leaves fullscreen and opens the admin panel; the TV cards remain view only.
 
-Buttons pause while saving. If another browser or kiosk already changed the person's status, the server rejects the stale action and refreshes the status instead of toggling it back. Administrator clock actions are recorded in Change history and can deliberately clock out within the kiosk's repeat-scan cooldown. Kiosk cooldown remains in force. Old open sessions that require review still need correction through **Edit attendance**, where historical edits retain their reason requirement.
+1. Enter the administrator password and press **Unlock admin controls**. This unlock lasts 30 minutes, independently of the persistent login. Use **Lock controls** when finished.
+2. Find an employee by name/ID or filter by department and team. Use the green **Clock in** or red **Clock out** button on their row. **Edit attendance** opens the existing correction form.
+3. For a batch, tick employee checkboxes or **Select shown**, then press **Clock in selected** or **Clock out selected**. Changing a filter clears the selection. The result lists how many were saved, skipped or need attention.
+
+The server enforces the password unlock on both individual and batch clock endpoints. Kiosk and read-only integration tokens cannot use them. Current-time actions are audited. Batches apply a fixed IN or OUT action, skip people already in that state, and preserve event IDs on retries; they never blindly toggle a selection. Individual stale actions are rejected. Old open sessions needing review still require **Edit attendance** and a correction reason. The kiosk repeat-scan cooldown remains unchanged.
+
+### Larger photos and sharper TV text
+
+**TV fullscreen** now opens **Large photos**: native 190×68 pixel cards with 44×44 photos and 14-pixel names. It rotates through grouped employee pages every 15 seconds. Use **Previous / Next** or **Pause rotation**; opening employee details pauses rotation too. The details popup has a larger portrait. All active employees remain available across the pages.
+
+Use **Compact overview** if you need the full workforce on one screen. Both views render text and photos at native CSS sizes, without scaling the entire board with a transform. The compact view necessarily uses smaller cards; large photos need more than one page on a 1366×768 TV.
+
+A photo of a TV can also show camera focus and screen-pattern interference. App changes cannot recover detail missing from an original photo or compensate for the display scaling its input. Keep the browser zoom at 100% and use the TV panel's actual native output resolution; the existing 1366×768 example is only correct for a panel using that resolution. If it remains blurry, collect the Pi's `wlr-randr` output before changing its display mode.
 
 ## Stay signed in
 

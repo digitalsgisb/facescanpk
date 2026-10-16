@@ -1,3 +1,4 @@
+import {paginateBoard} from './board-layout.js';
 import React,{useState,useMemo,useRef,useLayoutEffect,useEffect} from 'react';
 import {Users,Pencil,Clock3,Search,Monitor,Minimize2,Maximize2,ArrowUpDown,ChevronDown} from 'lucide-react';
 
@@ -70,29 +71,34 @@ export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy}){
   </>;
 }
 
-export function LiveBoard({employees,live,onDetails,soundControl}){
-  const [query,setQuery]=useState(''),[onlyIn,setOnlyIn]=useState(false),[fit,setFit]=useState(false),[fullscreen,setFullscreen]=useState(false),[scale,setScale]=useState(1);
-  const root=useRef(null),stage=useRef(null),header=useRef(null),toolbar=useRef(null);
-  const people=employees.filter(e=>(!onlyIn||e.status==='IN')&&(!query||[e.name,e.nickname,e.id,e.department,e.line,e.position].some(s=>s?.toLowerCase().includes(query.toLowerCase()))));
-  const groups=useMemo(()=>Object.entries(people.reduce((out,e)=>{(out[boardGroupName(e)]||=[]).push(e);return out},{})).sort(([a],[b])=>boardGroupOrder(a,b)),[employees,query,onlyIn]);
+export function LiveBoard({employees,live,onDetails,soundControl,onAdminControls,detailsOpen=false}){
+  const [query,setQuery]=useState(''),[onlyIn,setOnlyIn]=useState(false),[fit,setFit]=useState(false),[fullscreen,setFullscreen]=useState(false);
+  const [mode,setMode]=useState('large'),[page,setPage]=useState(0),[rotating,setRotating]=useState(true),[dimensions,setDimensions]=useState({width:1200,height:600});
+  const root=useRef(null),stage=useRef(null),windowRef=useRef(null);
+  const people=useMemo(()=>employees.filter(e=>(!onlyIn||e.status==='IN')&&(!query||[e.name,e.nickname,e.id,e.department,e.line,e.position].some(s=>s?.toLowerCase().includes(query.toLowerCase())))),[employees,onlyIn,query]);
+  const groups=useMemo(()=>Object.entries(people.reduce((out,e)=>{(out[boardGroupName(e)]||=[]).push(e);return out},{})).sort(([a],[b])=>boardGroupOrder(a,b)).map(([name,workers])=>[name,[...workers].sort((a,b)=>(a.team||'').localeCompare(b.team||'')||(a.nickname||a.name).localeCompare(b.nickname||b.name))]),[people]);
+  const pages=useMemo(()=>paginateBoard(groups,dimensions),[groups,dimensions]);
+  const currentPage=Math.min(page,pages.length-1),shown=fit&&mode==='large'?pages[currentPage]:groups;
+  const shownCount=shown.reduce((sum,[,workers])=>sum+workers.length,0);
   useEffect(()=>{const listener=()=>{const active=document.fullscreenElement===root.current;setFullscreen(active);if(active){setFit(true);setQuery('');setOnlyIn(false)}};document.addEventListener('fullscreenchange',listener);return()=>document.removeEventListener('fullscreenchange',listener)},[]);
   useLayoutEffect(()=>{
     let frame;const measure=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
-      if(!stage.current||!root.current)return;
-      if(!fit){stage.current.style.width='100%';setScale(1);return;}
-      const available=stage.current.parentElement.clientHeight-8;
-      const width=stage.current.parentElement.clientWidth;
-      // Find the largest readable scale while also using the entire screen width.
-      let low=.05,high=1;
-      for(let i=0;i<12;i++){const candidate=(low+high)/2;stage.current.style.width=`${width/candidate}px`;if(stage.current.scrollHeight*candidate<=available)low=candidate;else high=candidate;}
-      stage.current.style.width=`${width/low}px`;setScale(low);
+      if(!windowRef.current)return;const width=Math.floor(windowRef.current.clientWidth),height=Math.max(1,Math.floor(windowRef.current.clientHeight)-6);
+      setDimensions(previous=>previous.width===width&&previous.height===height?previous:{width,height});
+      if(!stage.current)return;
+      if(mode!=='all'||!fit){stage.current.removeAttribute('style');return;}
+      const apply=height=>{const values={'--board-card-height':height+'px','--board-card-width':Math.max(84,Math.round(height*3.2))+'px','--board-photo-size':Math.max(16,height-10)+'px','--board-name-size':Math.max(8,Math.round(height*.28))+'px','--board-position-size':Math.max(7,Math.round(height*.22))+'px'};Object.entries(values).forEach(([key,value])=>stage.current.style.setProperty(key,value));};
+      let low=22,high=44,best=22;while(low<=high){const candidate=Math.floor((low+high)/2);apply(candidate);if(stage.current.scrollHeight<=height){best=candidate;low=candidate+1;}else high=candidate-1;}apply(best);
     })};
-    const observer=new ResizeObserver(measure);observer.observe(root.current);observer.observe(stage.current.parentElement);measure();return()=>{observer.disconnect();cancelAnimationFrame(frame)};
-  },[fit,fullscreen,groups]);
-  async function toggleFullscreen(){
-    if(fullscreen){if(document.fullscreenElement)await document.exitFullscreen();else setFullscreen(false);return;}
-    setFit(true);setQuery('');setOnlyIn(false);
-    try{await root.current.requestFullscreen()}catch{setFullscreen(true)}
-  }
-  return <section ref={root} className={'board-page redesigned-board '+(fit?'fit-all ':'')+(fullscreen?'tv-mode':'')}><header className="board-header" ref={header}><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>Port Klang · attendance workspace</small></div></div><div className="board-totals">{soundControl}<div><b>{people.length}</b><small>{fit?'Employees on screen':'Employees shown'}</small></div><div><b>{employees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><div><b>{employees.filter(e=>e.status!=='IN').length}</b><small>Currently out</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span><button className="secondary" onClick={()=>{setFit(!fit);if(!fit){setQuery('');setOnlyIn(false)}}}>{fit?<Minimize2 size={15}/>:<Maximize2 size={15}/>} {fit?'Comfort view':'Fit all'}</button><button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button></div></header>{!fullscreen&&<div className="board-toolbar" ref={toolbar}><div className="search"><Search size={17}/><input aria-label="Search live board" placeholder="Find a person, department or line…" value={query} onChange={e=>{setQuery(e.target.value);setFit(false)}}/></div><label className="checkbox-label"><input type="checkbox" checked={onlyIn} onChange={e=>{setOnlyIn(e.target.checked);setFit(false)}}/>Show clocked-in employees only</label></div>}<div className="board-stage-window"><div className="board-stage" ref={stage} style={{transform:fit?`scale(${scale})`:undefined}}>{groups.map(([name,workers])=><BoardRow key={name} name={name} workers={workers} onDetails={onDetails}/>)}</div></div>{fit&&<div className="tv-fit-footer">{people.length} employees · {groups.length} groups · Auto-fit {Math.round(scale*100)}%<span>IN / OUT stays visible · Select a person to view details · TV board is view only</span></div>}</section>;
+    const observer=new ResizeObserver(measure);observer.observe(root.current);observer.observe(windowRef.current);measure();return()=>{observer.disconnect();cancelAnimationFrame(frame)};
+  },[fit,mode,groups]);
+  useEffect(()=>{if(!fit||mode!=='large'||pages.length<2||!rotating||detailsOpen)return;const timer=setInterval(()=>setPage(previous=>(previous+1)%pages.length),15000);return()=>clearInterval(timer);},[fit,mode,pages.length,rotating,detailsOpen]);
+  async function toggleFullscreen(){if(fullscreen){if(document.fullscreenElement)await document.exitFullscreen();else setFullscreen(false);return;}setFit(true);setQuery('');setOnlyIn(false);try{await root.current.requestFullscreen()}catch{setFullscreen(true)}}
+  async function admin(){if(document.fullscreenElement)await document.exitFullscreen();setFullscreen(false);onAdminControls?.();}
+  return <section ref={root} className={'board-page redesigned-board '+(fit?'fit-all ':'')+(fullscreen?'tv-mode ':'')+(mode==='large'?'large-photo-board':'native-overview-board')}>
+    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>Port Klang · attendance workspace</small></div></div><div className="board-totals"><div><b>{employees.length}</b><small>Employees</small></div><div><b>{employees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button><button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{onAdminControls&&<button className="primary" onClick={admin}>Admin controls</button>}</div></header>
+    {!fullscreen&&<div className="board-toolbar"><div className="search"><Search size={17}/><input aria-label="Search live board" placeholder="Find a person, department or line…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/></div><label className="checkbox-label"><input type="checkbox" checked={onlyIn} onChange={e=>{setOnlyIn(e.target.checked);setPage(0)}}/>Show clocked-in employees only</label><button className="secondary" onClick={()=>setFit(!fit)}>{fit?'Scrollable view':'Fit screen'}</button></div>}
+    <div className="board-stage-window" ref={windowRef}><div className="board-stage" ref={stage}>{shown.map(([name,workers])=><BoardRow key={name} name={name} workers={workers} onDetails={onDetails}/>)}</div></div>
+    {fit&&<div className="tv-fit-footer"><strong>{mode==='large'?shownCount+' of '+people.length+' employees · Larger photos':people.length+' employees · Compact overview'}</strong>{mode==='large'&&<div className="board-page-controls"><button disabled={pages.length<2} onClick={()=>setPage((currentPage+pages.length-1)%pages.length)} aria-label="Previous TV page">Previous</button><span>Page {currentPage+1} / {pages.length}</span><button disabled={pages.length<2} onClick={()=>setPage((currentPage+1)%pages.length)} aria-label="Next TV page">Next</button><button onClick={()=>setRotating(!rotating)}>{rotating?'Pause rotation':'Resume rotation'}</button></div>}<span>View only · Click a card for details</span></div>}
+  </section>;
 }

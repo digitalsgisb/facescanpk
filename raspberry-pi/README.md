@@ -115,7 +115,7 @@ Refresh the HDMI browser to load the updated AI PC dashboard. Pi updates do not 
 3. Start Python as above. It maps an 800×480 window at (0,0), then requests fullscreen. Confirm its registration keyboard is fully visible on DSI. Monitor placement ultimately depends on the Pi's window manager.
 4. Open the Pi's browser and enter the **PC's LAN address**, for example `http://192.168.1.100:8765`. Do not use `127.0.0.1` on the Pi: that points back to the Pi itself.
 5. Move the browser window onto HDMI **before** entering fullscreen. Sign into the attendance app, open Live board, then select TV fullscreen. If browser chrome still occupies space, use the browser's own fullscreen control while that window is on HDMI.
-6. Check that all 173 employees fit when the supplied company data is loaded. The count follows your actual active employees; the public code-only installation starts empty. Python remains on DSI while the browser board occupies HDMI.
+6. Check the total employee count and use the TV page controls to see everyone. Large photos rotate across grouped pages; Compact overview shows the workforce together. The count follows your actual active employees; the public code-only installation starts empty. Python remains on DSI while the browser board occupies HDMI.
 
 ## If the connection check fails
 

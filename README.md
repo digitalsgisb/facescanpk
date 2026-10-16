@@ -133,6 +133,12 @@ npm ci
 npm run build
 ```
 
+## Admin attendance controls and TV photos
+
+Open **Clock in / out** in the sidebar or **Admin controls** in the TV header. Enter the administrator password to unlock individual and batch clock actions for 30 minutes. The TV cards only show details. Select employees and use **Clock in selected / Clock out selected** for a batch. See the [admin controls guide](ai-pc/README.md#admin-clock-in--out-including-batches).
+
+TV fullscreen defaults to **Large photos**, rotating through readable grouped pages every 15 seconds. **Compact overview** keeps the full workforce in one view. Neither mode scales the entire board. See [larger photos and TV clarity](ai-pc/README.md#larger-photos-and-sharper-tv-text).
+
 ## Displays
 
 - DSI-1: Python touchscreen, **800×480**, desktop position **0,0**.

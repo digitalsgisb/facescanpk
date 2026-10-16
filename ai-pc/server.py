@@ -111,6 +111,7 @@ class Store:
               action TEXT NOT NULL, entity_id TEXT NOT NULL, before_json TEXT, after_json TEXT);
             CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK(id=1), salt TEXT NOT NULL, password TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS attendance_access (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
             ''')
             # Upgrade still-valid sessions; never revive a session that already expired.
             db.execute('UPDATE auth_sessions SET expires=0 WHERE expires>?', (time.time(),))
@@ -239,7 +240,7 @@ class Store:
             result.append(e)
         return result
 
-    def scan(self, data, device, dashboard=False):
+    def scan(self, data, device, dashboard=False, skip_unchanged=False):
         event_id = data.get('event_id', '')
         if not re.fullmatch(r'[A-Za-z0-9-]{8,80}', event_id):
             raise Problem('A stable event_id is required for safe retries.')
@@ -265,9 +266,17 @@ class Store:
                 raise Problem('Employee is unknown or archived.', 422)
             opened = db.execute('SELECT * FROM sessions WHERE employee_id=? AND time_out IS NULL', (eid,)).fetchone()
             if dashboard and data['action'] != ('OUT' if opened else 'IN'):
+                if skip_unchanged:
+                    result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'UNCHANGED',
+                              'timestamp':occurred.isoformat(),'source':'dashboard','flags':[],
+                              'message':'Already clocked '+('in' if opened else 'out')+'; no change.'}
+                    db.execute('INSERT INTO events VALUES(?,?,?,?,?,?,?)',
+                               (event_id,eid,device,occurred.isoformat(),now_iso(),fingerprint,json.dumps(result)))
+                    self.audit(db,'admin','clock_unchanged',eid,None,result)
+                    return result
                 raise Problem('Attendance already changed. Refresh and check the current status.', 409)
             cfg = self.settings(db)
-            latest = db.execute('SELECT * FROM events WHERE employee_id=? ORDER BY occurred_at DESC LIMIT 1', (eid,)).fetchone()
+            latest = db.execute("SELECT * FROM events WHERE employee_id=? AND json_extract(result,'$.action')!='UNCHANGED' ORDER BY occurred_at DESC LIMIT 1", (eid,)).fetchone()
             flags = []
             if latest and occurred < stamp(latest['occurred_at']):
                 result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'REVIEW',
@@ -464,6 +473,38 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'sessions':self.sessions(db, query)})
                 if scope != 'admin':
                     raise Problem('Administrator access required.',403)
+                if route == '/api/clock-access' and method == 'GET':
+                    access = db.execute('SELECT expires FROM attendance_access WHERE token_hash=? AND expires>?',
+                                        (digest(self.session_token), time.time())).fetchone()
+                    return self.send({'unlocked':bool(access),'expires_at':access['expires'] if access else None})
+                if route == '/api/clock-access' and method == 'DELETE':
+                    db.execute('DELETE FROM attendance_access WHERE token_hash=?',(digest(self.session_token),))
+                    db.commit()
+                    return self.send({'ok':True})
+                if route in ('/api/clock','/api/clock/batch') and method == 'POST':
+                    if not db.execute('SELECT 1 FROM attendance_access WHERE token_hash=? AND expires>?',
+                                      (digest(self.session_token),time.time())).fetchone():
+                        raise Problem('Enter the administrator password to unlock attendance controls.',403)
+                if route == '/api/clock/batch' and method == 'POST':
+                    data = self.body()
+                    ids, action, batch_id = data.get('employee_ids'), data.get('action'), data.get('batch_id','')
+                    if action not in ('IN','OUT') or not isinstance(ids,list) or not 1 <= len(ids) <= 200:
+                        raise Problem('Choose clock in or out and between 1 and 200 employees.')
+                    if not all(isinstance(eid,str) and eid for eid in ids) or len(set(ids)) != len(ids):
+                        raise Problem('Employee IDs must be unique non-empty strings.')
+                    if not isinstance(batch_id,str) or not re.fullmatch(r'[A-Za-z0-9-]{8,80}', batch_id):
+                        raise Problem('A stable batch_id is required for safe retries.')
+                    results = []
+                    for eid in ids:
+                        event_id = str(uuid.uuid5(uuid.NAMESPACE_URL,f'attendance:{batch_id}:{eid}'))
+                        previous = db.execute('SELECT occurred_at FROM events WHERE id=?',(event_id,)).fetchone()
+                        try:
+                            result = self.store.scan({'event_id':event_id,'employee_id':eid,'action':action,
+                                'timestamp':previous['occurred_at'] if previous else now_iso()},'admin',dashboard=True,skip_unchanged=True)
+                            results.append({**result,'status':'saved' if result['action']==action else 'skipped' if result['action']=='UNCHANGED' else 'review'})
+                        except Problem as exc:
+                            results.append({'employee_id':eid,'status':'error','message':exc.message})
+                    return self.send({'results':results})
                 if route == '/api/clock' and method == 'POST':
                     data = self.body()
                     # Server time is authoritative. Reuse the committed time for an idempotent retry.
@@ -522,9 +563,13 @@ class Handler(BaseHTTPRequestHandler):
                 cookie = SimpleCookie(self.headers.get('Cookie',''))
                 if 'attendance_session' in cookie:
                     db.execute('DELETE FROM auth_sessions WHERE token_hash=?',(digest(cookie['attendance_session'].value),))
+                    db.execute('DELETE FROM attendance_access WHERE token_hash=?',(digest(cookie['attendance_session'].value),))
+                db.commit()
                 return self.send({'ok':True},headers={'Set-Cookie':'attendance_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'})
-            if route not in ('/api/auth/setup','/api/auth/login') or method != 'POST':
+            if route not in ('/api/auth/setup','/api/auth/login','/api/auth/unlock-attendance') or method != 'POST':
                 raise Problem('Endpoint not found.',404)
+            if route == '/api/auth/unlock-attendance':
+                self.identity(db)
             password = self.body().get('password','')
             if not isinstance(password,str) or len(password)>256:
                 raise Problem('Invalid password.')
@@ -549,6 +594,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.store.failures[key]=(failures,time.time()+300 if failures>=5 else 0)
                 raise Problem('Incorrect password.',401)
             self.store.failures.pop(key,None)
+            if route == '/api/auth/unlock-attendance':
+                expires = time.time()+30*60
+                db.execute('INSERT OR REPLACE INTO attendance_access VALUES(?,?)',(digest(self.session_token),expires))
+                db.commit()
+                return self.send({'ok':True,'expires_at':expires})
             token = secrets.token_urlsafe(32)
             db.execute('DELETE FROM auth_sessions WHERE expires>0 AND expires<?',(time.time(),))
             db.execute('INSERT INTO auth_sessions VALUES(?,?)',(digest(token),0))
