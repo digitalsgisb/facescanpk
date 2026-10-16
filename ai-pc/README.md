@@ -12,9 +12,15 @@ Bell sound is on by default. Click anywhere in the app once after opening it to 
 
 ### One-click clock in and clock out
 
-In **Employees**, press **Clock in** on an OUT employee or **Clock out** on an IN employee. On the **Live board**, press the person's card to perform the same action, including in TV fullscreen. The server saves the current time, updates the board, and sends the notification with its bell. No date/time form is needed for a current clock action.
+In **Employees**, press **Clock in** on an OUT employee or **Clock out** on an IN employee. The **Live board is view only**: pressing a card opens employee details, including in TV fullscreen. It cannot clock a person in/out or edit employee data. The server saves the current time, updates the board, and sends the notification with its bell. No date/time form is needed for a current clock action.
 
-Buttons pause while saving. If another browser or kiosk already changed the person's status, the server rejects the stale action and refreshes the status instead of toggling it back. Administrator clock actions are recorded in Change history and can deliberately clock out within the kiosk's repeat-scan cooldown. Kiosk cooldown remains in force. Old open sessions that require review still need correction through **History**, where historical edits retain their reason requirement.
+Buttons pause while saving. If another browser or kiosk already changed the person's status, the server rejects the stale action and refreshes the status instead of toggling it back. Administrator clock actions are recorded in Change history and can deliberately clock out within the kiosk's repeat-scan cooldown. Kiosk cooldown remains in force. Old open sessions that require review still need correction through **Edit attendance**, where historical edits retain their reason requirement.
+
+## Stay signed in
+
+Login sessions have no server-side expiry and survive API/container restarts until you press Log out. Valid sessions from the previous eight-hour setup are upgraded automatically. If your old browser cookie already expired, sign in once after updating.
+
+The browser stores a persistent HttpOnly cookie for 400 days and renews it on authenticated API requests. Browser cookie limits, clearing site data, private-browsing cleanup, or changing browsers can still require another login. Log out deletes the server session and clears its cookie immediately.
 
 ## Step-by-step: first setup on the AI PC
 

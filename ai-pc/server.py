@@ -24,6 +24,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 BASE = Path(__file__).resolve().parent
 KL = timezone(timedelta(hours=8), 'Asia/Kuala_Lumpur')
+SESSION_COOKIE_AGE = 400 * 24 * 3600  # Browser persistence, renewed on authenticated requests.
 FIELDS = ('id', 'name', 'nickname', 'department', 'position', 'line', 'team', 'photo_url', 'schedule_id', 'active')
 TEMPLATES = [
     ('normal', 'Normal working hours', '07:45', '17:40', 0),
@@ -111,6 +112,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK(id=1), salt TEXT NOT NULL, password TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
             ''')
+            # Upgrade still-valid sessions; never revive a session that already expired.
+            db.execute('UPDATE auth_sessions SET expires=0 WHERE expires>?', (time.time(),))
             for s in TEMPLATES:
                 db.execute('INSERT OR IGNORE INTO schedules VALUES(?,?,?,?,?)', s)
             for key, value in {'cooldown_seconds':300, 'early_in_minutes':120, 'late_in_minutes':120,
@@ -342,6 +345,9 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def send(self, data, status=200, headers=None, content_type='application/json'):
+        headers = dict(headers or {})
+        if getattr(self, 'session_token', None) and 'Set-Cookie' not in headers:
+            headers['Set-Cookie'] = self.session_cookie(self.session_token)
         raw = data if isinstance(data, bytes) else json.dumps(data, ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header('Content-Type', content_type)
@@ -354,6 +360,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(k,v)
         self.end_headers()
         self.wfile.write(raw)
+
+    def session_cookie(self, token):
+        secure = '; Secure' if self.server.is_tls else ''
+        return f'attendance_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_COOKIE_AGE}{secure}'
 
     def body(self):
         try:
@@ -378,7 +388,8 @@ class Handler(BaseHTTPRequestHandler):
             token = cookie['attendance_session'].value
         except Exception:
             token = ''
-        if token and db.execute('SELECT 1 FROM auth_sessions WHERE token_hash=? AND expires>?', (digest(token),time.time())).fetchone():
+        if token and db.execute('SELECT 1 FROM auth_sessions WHERE token_hash=? AND (expires=0 OR expires>?)', (digest(token),time.time())).fetchone():
+            self.session_token = token
             return {'id':'admin','scope':'admin'}
         raise Problem('Please sign in.', 401)
 
@@ -403,6 +414,7 @@ class Handler(BaseHTTPRequestHandler):
         self.handle_request('DELETE')
 
     def handle_request(self, method):
+        self.session_token = None
         try:
             url = urlparse(self.path)
             route = unquote(url.path)
@@ -538,11 +550,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise Problem('Incorrect password.',401)
             self.store.failures.pop(key,None)
             token = secrets.token_urlsafe(32)
-            db.execute('DELETE FROM auth_sessions WHERE expires<?',(time.time(),))
-            db.execute('INSERT INTO auth_sessions VALUES(?,?)',(digest(token),time.time()+8*3600))
+            db.execute('DELETE FROM auth_sessions WHERE expires>0 AND expires<?',(time.time(),))
+            db.execute('INSERT INTO auth_sessions VALUES(?,?)',(digest(token),0))
             db.commit()
-            secure='; Secure' if self.server.is_tls else ''
-            return self.send({'ok':True},headers={'Set-Cookie':f'attendance_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800{secure}'})
+            return self.send({'ok':True},headers={'Set-Cookie':self.session_cookie(token)})
 
     def sessions(self, db, query):
         start = query.get('from', [str(datetime.now(KL).date()-timedelta(days=7))])[0]

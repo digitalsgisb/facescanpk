@@ -7,6 +7,7 @@ import './tv.css';
 import {EmployeeGroups,LiveBoard,departmentOrder} from './workforce.jsx';
 import './enhancements.css';
 import './polish.css';
+import {EmployeeDetails} from './employee-details.jsx';
 import {useAttendanceNotifications, AttendanceNotifications, AttendanceSound} from './attendance-notifications.jsx';
 
 const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -42,7 +43,7 @@ function App(){
   const [historyLimit,setHistoryLimit]=useState(200);
   const notifications=useAttendanceNotifications(state,auth?.signed_in);
   const clockLock=useRef(false);
-  const [clockError,setClockError]=useState('');
+  const [personDetails,setPersonDetails]=useState(null);
   const notify=message=>{setToast(message);setTimeout(()=>setToast(''),4500)};
   const refresh=useCallback(async()=>{
     try{const data=await api('/state');setState(data);setError('');}catch(e){if(e.status===401){setAuth({signed_in:false,setup_required:false});setState(null)}setError(e.message)}
@@ -76,11 +77,11 @@ function App(){
   const filtered=(state?.employees||[]).filter(e=>(showArchived?!e.active:e.active)&&(!search||[e.name,e.nickname,e.id,e.department,e.line,e.position].some(v=>v?.toLowerCase().includes(search.toLowerCase())))&&(department==='all'||(e.department||'Unassigned')===department)&&(team==='all'||(e.team||'Unassigned')===team)&&(status==='all'||e.status===status));
   async function clockAttendance(employee){
     if(clockLock.current||busy||!employee.active)return;
-    clockLock.current=true;setClockError('');
+    clockLock.current=true;
     try{
       const result=await mutate('/clock','POST',{employee_id:employee.id,action:employee.status==='IN'?'OUT':'IN',event_id:Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')});
-      if(!['IN','OUT'].includes(result.action)){setClockError(result.message);setError(result.message);}
-    }catch(e){await refresh();setClockError(e.message);setError(e.message);}
+      if(!['IN','OUT'].includes(result.action))setError(result.message);
+    }catch(e){await refresh();setError(e.message);}
     finally{clockLock.current=false;}
   }
   async function openAttendance(employee){
@@ -108,7 +109,7 @@ function App(){
         <section className="shift-strip"><div><span className="eyebrow">BUILT FOR A 24-HOUR WORKPLACE</span><h2>One workplace. Every shift.</h2></div><div className="shift-mini"><Sun size={19}/><div>Normal hours<small>07:45 – 17:40</small></div></div><div className="shift-mini"><Sun size={19}/><div>Day shift<small>08:00 – 16:15 / 20:00</small></div></div><div className="shift-mini"><Moon size={19}/><div>Night shift<small>16:15 – 00:30 / 20:00 – 08:00</small></div></div></section>
       </>}
 
-      {page==='board'&&<LiveBoard employees={active} live={live} onAttendance={clockAttendance} busy={busy} clockError={clockError} soundControl={<AttendanceSound notifications={notifications}/>}/>}
+      {page==='board'&&<LiveBoard employees={active} live={live} onDetails={employee=>setPersonDetails(employee.id)} soundControl={<AttendanceSound notifications={notifications}/>}/>}
 
       {page==='employees'&&<section className="card employee-card"><div className="tabs-row"><div className="tabs"><button className={!showArchived?'active':''} onClick={()=>setShowArchived(false)}>Active employees <span>{active.length}</span></button><button className={showArchived?'active':''} onClick={()=>setShowArchived(true)}>Archived <span>{state.employees.length-active.length}</span></button></div><button className="text-button" onClick={()=>exportCsv(filtered.map(e=>({ID:e.id,Name:e.name,Nickname:e.nickname,Department:e.department,Position:e.position,Line:e.line,Team:e.team,Schedule:e.effective_schedule?.name||'Unassigned',Status:e.status})), 'employees.csv')}><ArrowDownToLine size={16}/>Export</button></div><div className="filters"><div className="search"><Search size={18}/><input aria-label="Search employees" placeholder="Search by name, ID or production line…" value={search} onChange={e=>setSearch(e.target.value)}/></div><select aria-label="Filter department" value={department} onChange={e=>setDepartment(e.target.value)}><option value="all">All departments</option>{departments.map(d=><option key={d}>{d}</option>)}</select><select aria-label="Filter team" value={team} onChange={e=>setTeam(e.target.value)}><option value="all">All teams</option>{['A','B','N','Unassigned'].map(t=><option key={t} value={t}>{t==='Unassigned'?t:'Team '+t}</option>)}</select><select aria-label="Filter attendance status" value={status} onChange={e=>setStatus(e.target.value)}><option value="all">Any status</option><option value="IN">Currently in</option><option value="OUT">Currently out</option></select></div><EmployeeGroups employees={filtered} onEdit={e=>setDialog({type:'employee',employee:e})} onAttendance={openAttendance} onClock={clockAttendance} busy={busy}/><footer className="table-footer">Showing {filtered.length} {showArchived?'archived':'active'} employees<span>Changes are saved in your workspace</span></footer></section>}
 
@@ -121,6 +122,7 @@ function App(){
       {page==='settings'&&<><div className="settings-grid"><section className="card"><div className="section-heading"><div><h2>Connected devices</h2><p>Raspberry Pi kiosks and future app connections</p></div><Cable size={21}/></div>{state.devices.filter(d=>d.active).length?state.devices.filter(d=>d.active).map(d=><div className="device-row" key={d.id}><div className="device-icon"><Monitor size={22}/></div><div><strong>{d.name}</strong><small>{d.scope==='integration'?'Read-only app connection':d.online?'Last seen '+timeLabel(d.last_seen):'Awaiting connection'}{d.health&&JSON.parse(d.health).camera==='stalled'?' · Camera stalled':''}</small></div><Badge tone={d.scope==='integration'?'neutral':d.online?'green':'amber'}>{d.scope==='integration'?'Read only':d.online?'Online':'Offline'}</Badge><button className="icon-button" aria-label={'Revoke '+d.name} onClick={()=>setDialog({type:'confirm',title:'Revoke this connection?',detail:'This token will stop working. Existing attendance records will be preserved.',action:()=>mutate('/devices/'+d.id,'DELETE',null,'Connection revoked')})}><X size={16}/></button></div>):<Empty icon={Monitor} title="Connect your first kiosk" detail="Create a token, then configure the Python kiosk with your AI PC’s network address."/>}<div className="card-bottom"><button className="primary" onClick={()=>setDialog({type:'device'})}><Plus size={16}/>Add connection</button></div></section><section className="card"><div className="section-heading"><div><h2>Data & backups</h2><p>Your attendance records live on the AI PC</p></div><ShieldCheck size={21}/></div><div className="backup-content"><div className="backup-icon"><ShieldCheck size={34}/></div><h3>Keep a copy off this PC</h3><p>Download a consistent database backup, including employee records, schedules and audit history. Uploaded photos need the runtime/uploads folder too.</p><a className="secondary" href="/api/backup" download><ArrowDownToLine size={17}/>Download database backup</a><small>Photo uploads are kept in your workspace; imported photo links still use their original hosting.</small></div></section></div><section className="card"><div className="section-heading"><div><h2>Attendance rules</h2><p>Out-of-hours scans are recorded and flagged, never silently discarded.</p></div><ListFilter size={20}/></div><RulesForm settings={state.settings} mutate={mutate}/></section><div className="integration-note"><Cable size={24}/><div><h3>Ready to connect your production app</h3><p>Create a read-only connection to retrieve employees and attendance through the API. Integration setup is documented with the project.</p></div></div></>}
     </div><footer className="page-footer"><span>SUGIHARA · PORT KLANG</span><span>Attendance workspace <span className="footer-dot">·</span> Asia/Kuala_Lumpur</span></footer></main>
     <AttendanceNotifications notifications={notifications}/>
+    {personDetails&&<EmployeeDetails employee={state.employees.find(employee=>employee.id===personDetails)} onClose={()=>setPersonDetails(null)}/>}
     {toast&&<div className="toast" role="status"><CheckCircle2 size={18}/>{toast}</div>}
     {dialog&&<ModalContent key={dialog.type+(dialog.employee?.id||dialog.session?.id||'')} dialog={dialog} close={()=>setDialog(null)} state={state} mutate={mutate} busy={busy} notify={notify} setDialog={setDialog}/>}
   </div>;

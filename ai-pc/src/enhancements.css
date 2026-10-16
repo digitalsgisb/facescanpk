@@ -20,3 +20,5 @@
 .tv-employee.in small{opacity:1}
 
 .staff-actions .quick-clock{font-weight:750}.staff-actions .clock-in{color:#11734c;background:#e8f5ee}.staff-actions .clock-out{color:#a22c3e;background:#faedf0}.quick-clock:disabled,.tv-employee:disabled{opacity:.55;cursor:wait}
+.staff-actions{flex-wrap:wrap}.staff-actions .quick-clock{order:-1;flex:1 0 100%;justify-content:center;padding:9px;font-size:12px}
+.employee-details-body{padding:20px}.employee-details-body .employee-profile{padding:0 0 18px}.employee-details-body .employee-profile .badge{margin-top:8px}.employee-readonly-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:0}.employee-readonly-details dt{font-size:11px;color:#897174;margin-bottom:5px}.employee-readonly-details dd{font-size:13px;font-weight:650;margin:0;overflow-wrap:anywhere}

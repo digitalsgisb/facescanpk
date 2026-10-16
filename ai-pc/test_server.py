@@ -5,6 +5,7 @@ import unittest
 import uuid
 import urllib.request
 import urllib.error
+from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from server import Store, Problem, make_server, digest
@@ -167,6 +168,7 @@ class HttpTests(unittest.TestCase):
         try:
             with urllib.request.urlopen(req) as r:
                 if r.headers.get('Set-Cookie'):
+                    self.last_set_cookie=r.headers['Set-Cookie']
                     self.cookie=r.headers['Set-Cookie'].split(';')[0]
                 raw=r.read()
                 return r.status,json.loads(raw) if r.headers.get_content_type()=='application/json' else raw
@@ -175,6 +177,37 @@ class HttpTests(unittest.TestCase):
 
     def login(self):
         self.assertEqual(self.request('/api/auth/setup','POST',{'password':'test-password-long-enough'})[0],200)
+
+    def test_login_persists_across_time_and_restart_until_logout(self):
+        self.login()
+        original=self.cookie
+        self.assertIn('Max-Age=34560000',self.last_set_cookie)
+        self.assertIn('HttpOnly',self.last_set_cookie)
+        self.assertIn('SameSite=Strict',self.last_set_cookie)
+        self.server.store=Store(self.server.store.path,seed=False)
+        with patch('server.time.time',return_value=4_102_444_800):
+            self.assertTrue(self.request('/api/auth/status')[1]['signed_in'])
+            self.assertEqual(self.request('/api/state')[0],200)
+        self.assertEqual(self.cookie,original)
+        self.assertIn('Max-Age=34560000',self.last_set_cookie)
+        self.assertEqual(self.request('/api/auth/logout','POST')[0],200)
+        self.assertIn('Max-Age=0',self.last_set_cookie)
+        self.cookie=original
+        self.assertFalse(self.request('/api/auth/status')[1]['signed_in'])
+        self.assertEqual(self.request('/api/state')[0],401)
+
+    def test_upgrade_keeps_valid_sessions_without_reviving_expired_ones(self):
+        import time
+        self.login()
+        with self.server.store.connect() as db:
+            db.execute('UPDATE auth_sessions SET expires=?',(time.time()+3600,))
+            db.execute('INSERT INTO auth_sessions VALUES(?,?)',(digest('expired-session'),time.time()-1))
+        self.server.store=Store(self.server.store.path,seed=False)
+        self.assertTrue(self.request('/api/auth/status')[1]['signed_in'])
+        with self.server.store.connect() as db:
+            self.assertEqual(db.execute('SELECT expires FROM auth_sessions WHERE token_hash=?',(digest(self.cookie.split('=',1)[1]),)).fetchone()[0],0)
+        self.cookie='attendance_session=expired-session'
+        self.assertFalse(self.request('/api/auth/status')[1]['signed_in'])
 
     def test_dashboard_clock_in_out_are_saved_audited_and_retry_safe(self):
         self.login()
