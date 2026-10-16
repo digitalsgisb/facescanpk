@@ -32,15 +32,37 @@ A photo of a TV can also show camera focus and screen-pattern interference. App 
 
 Open **Control centre** from the sidebar. It brings team hours, overtime, schedule templates and links to the other admin tools together.
 
+First use **Department, section or line** to choose **Production · Conversion**, **Production · Roll Making**, **Office**, another department, or an individual production line. Each saved group has its own A/B/N hours, OT switches and rotation. For example, Conversion A can rotate weekly with OT on while Roll Making A stays on Night with OT off. A line setup takes priority over its section; **Use inherited hours** removes that group's custom setup and restores its parent/company hours. No existing shifts change just because you install the update.
+
+For employees whose Department is **PRODUCTION**, the Roll Making line automatically belongs to **ROLL MAKING**; every other production line belongs to **CONVERSION**. You can explicitly choose the **Production section** in **Employees → Profile** when needed. Other departments keep their own group. The employee directory separates the two production sections, and the TV board keeps the production lines/teams visible with their section labels.
+
 - **Fixed teams:** choose **Day**, **Night** or **Normal** for each team. The separate **Overtime** switch selects the matching Day + OT or Night + OT hours. The time preview shows exactly what will apply.
 - **Automatic A/B swap:** choose A and B's starting shifts, a start date and the number of days between swaps. Each team's OT setting stays with that team when the shifts swap. Team N keeps its own fixed hours.
 - Press **Save team working hours** to apply the setup. Until saved, the controls are a preview. **Individual employee defaults** leaves a team's existing personal schedules in use.
 - In **Employees → Profile**, changing the Team immediately updates **Working hours today** in the editor. Individual fallback hours are used only when no higher-priority setting applies.
 - Use **Working-hour templates** to edit exact start/end times, or **Date override** for an employee/team exception.
 
-Schedule priority is: employee date override → team date override → A/B rotation → team default → individual fallback. Team OT affects rotation/default hours; explicit date overrides retain their chosen schedule. Existing attendance sessions keep their saved planned times.
+Date overrides can target a team's section, line or department. Employee date overrides come first, then team date overrides (line → section → department → company-wide). Without a date override, the most specific saved group supplies the A/B rotation or fixed team hours (line → section → department → company defaults), followed by individual fallback hours. A saved group is a complete team setup; choosing **Individual employee defaults** inside it uses personal schedules rather than parent-group hours. Team OT affects rotation/default hours; explicit date overrides retain their chosen schedule. Existing attendance sessions keep their saved planned times. Existing company-wide team date overrides retain their original reach, so review them in **Schedules & roster** if you want section-specific exceptions instead.
+
+### Office departments and employee order
+
+Keep office staff's **Department** as **OFFICE** and set their **Office department** in **Employees → Profile**, for example HR, Production or Finance. This records the department they represent while keeping them on the Office board. The department appears on their cards and read-only details; the directory also has an **Office department** filter. Existing Office employees start with this new field blank so no department is guessed.
+
+In **Control centre → Employee display order**, choose **Position seniority**, **Manual order** or **Name A–Z**, then press **Save display order**. To arrange people manually, choose **Arrange group** and use the up/down arrows. The saved order applies to the TV board and the directory's **Saved display order**, within each existing group/team. New employees remain visible. Changing sorting mode preserves your manual list.
+
+Position seniority is Director → General Manager → Assistant Manager → Senior Executive → Executive → Supervisor → Leader → Technical Officer → Operator → Technician. Legacy `WORKER` positions sort with Operator; `ASISTANT MANAGER` and `TECHNICAL OFFICIER` spellings are also recognised. Position suggestions in employee profiles include the full hierarchy. Unrecognised/blank positions appear after the known positions, with names used to break ties.
 
 The workspace stays white with black headers, sidebar, login and favicon. The company logo keeps its original colours. The sidebar has animated translucent ribbons, an outlined orbit and a glowing selected item. Attendance cards retain their flat green/red colours. **Compact overview** automatically scales the full workforce into its screen area without scrolling. **Large photos** keeps readable native-size cards on rotating pages.
+
+## Needs attention: see the issue and open the fix
+
+Click the **NEEDS ATTENTION → View issues** overview card or **Needs attention** in the sidebar. It shows all unresolved issues across all dates, independently of the attendance log's selected dates:
+
+- **Missing working hours:** lists affected active employees; **Set working hours** opens that employee's profile directly.
+- **Attendance to check:** shows the exact employee, work date, clock times and plain-language explanations for late arrival, early departure, missing hours or other flags. It also includes old open clock-ins beyond the review threshold. **Review attendance** opens that exact record with its issues shown above the form. Correct the times, give a reason, and tick **Mark all session flags reviewed** when resolved. An old open session remains an issue until its times are corrected or it is closed.
+- **Scans awaiting review:** shows the stored scan's time and reason; **Review scan** opens its review decision form. Correct any underlying attendance first, then record the decision.
+
+**View in attendance log** selects the affected employee and work date; scan links include the previous work date to cover overnight shifts. Lists have Previous/Next pages so older issues remain reachable. The count decreases after a real fix/review; an attendance record with several flags counts once. Assigning today's working hours does not silently erase flags from past records. Missing-hours issues and pending scan reviews are separate issues even when they concern the same employee. The overview and issue counts refresh on saves/live updates and every minute while those pages are visible. Issue endpoints require an administrator login.
 
 ## Stay signed in
 

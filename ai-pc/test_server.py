@@ -92,8 +92,55 @@ class AttendanceTests(unittest.TestCase):
             from datetime import date
             self.assertEqual(self.store.resolve_schedule(db,e,date(2026,10,2))['id'],'day')
             self.assertEqual(self.store.resolve_schedule(db,e,date(2026,10,9))['id'],'night')
-            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?)',('override','A',None,'2026-10-09','2026-10-09','normal'))
+            db.execute('INSERT INTO assignments (id,employee_id,team,start_date,end_date,schedule_id) VALUES(?,?,?,?,?,?)',('override','A',None,'2026-10-09','2026-10-09','normal'))
             self.assertEqual(self.store.resolve_schedule(db,e,date(2026,10,9))['id'],'normal')
+
+    def test_section_line_rotation_and_scoped_overrides(self):
+        from datetime import date
+        with self.store.connect() as db:
+            groups={'section:CONVERSION':{'team_schedules':{'A':'day','B':'night'},'team_overtime':{'A':True},
+                    'rotation':{'anchor_date':'2026-10-01','interval_days':7,'schedule_ids':['day','night']}},
+                    'section:ROLL MAKING':{'team_schedules':{'A':'night'},'team_overtime':{'A':False},'rotation':None},
+                    'line:MF':{'team_schedules':{'A':'day'},'rotation':None}}
+            db.execute("UPDATE settings SET value=? WHERE key='schedule_groups'",(json.dumps(groups),))
+            e=dict(db.execute("SELECT * FROM employees WHERE id='A'").fetchone())
+            e.update(department='PRODUCTION',line='FC')
+            resolve=lambda employee:self.store.resolve_schedule(db,employee,date(2026,10,9))['id']
+            self.assertEqual(resolve(e),'night-ot')
+            self.assertEqual(resolve({**e,'line':'ROLL MAKING'}),'night')
+            self.assertEqual(resolve({**e,'line':'MF'}),'day')
+            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?,?)',('section-date',None,'A','2026-10-09','2026-10-09','normal','section:CONVERSION'))
+            self.assertEqual(resolve(e),'normal')
+            self.assertEqual(resolve({**e,'line':'ROLL MAKING'}),'night')
+            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?,?)',('line-date',None,'A','2026-10-09','2026-10-09','day','line:FC'))
+            self.assertEqual(resolve(e),'day')
+            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?,?)',('personal','A',None,'2026-10-09','2026-10-09','night-ot',''))
+            self.assertEqual(resolve(e),'night-ot')
+            self.assertEqual(resolve({**e,'id':'U','department':'OFFICE','office_department':'PRODUCTION'}),'day')
+
+    def test_existing_database_migrates_without_losing_employees_assignments_or_sessions(self):
+        import sqlite3
+        from contextlib import closing
+        legacy=Path(self.temp.name)/'legacy.sqlite3'
+        with closing(sqlite3.connect(legacy)) as db:
+            db.executescript("""
+                CREATE TABLE employees (id TEXT PRIMARY KEY,name TEXT NOT NULL,nickname TEXT,department TEXT,position TEXT,line TEXT,team TEXT,photo_url TEXT,schedule_id TEXT,active INTEGER NOT NULL,updated_at TEXT NOT NULL);
+                INSERT INTO employees VALUES ('old','Legacy employee','','PRODUCTION','SUPERVISOR','FC','A','','day',1,'2026-10-01');
+                CREATE TABLE assignments (id TEXT PRIMARY KEY,employee_id TEXT,team TEXT,start_date TEXT NOT NULL,end_date TEXT NOT NULL,schedule_id TEXT NOT NULL);
+                INSERT INTO assignments VALUES ('old-roster',NULL,'A','2026-10-01','2026-10-31','normal');
+            """)
+            db.commit()
+        migrated=Store(legacy,seed=False)
+        migrated.scan({'event_id':str(uuid.uuid4()),'employee_id':'old','timestamp':'2026-10-10T08:00:00+08:00'},'test')
+        migrated=Store(legacy,seed=False)
+        with migrated.connect() as db:
+            employee=dict(db.execute("SELECT * FROM employees WHERE id='old'").fetchone())
+            self.assertEqual(employee['production_section'],'')
+            self.assertEqual(employee['name'],'Legacy employee')
+            self.assertEqual(db.execute('SELECT scope FROM assignments').fetchone()[0],'')
+            self.assertEqual(db.execute('SELECT schedule_id FROM sessions').fetchone()[0],'normal')
+            migrated.insert_employee(db,{'id':'new','name':'New','office_department':'HR','department':'OFFICE'})
+            self.assertEqual(db.execute("SELECT office_department FROM employees WHERE id='new'").fetchone()[0],'HR')
 
     def test_archived_employee_cannot_scan(self):
         with self.store.connect() as db:
@@ -114,9 +161,9 @@ class AttendanceTests(unittest.TestCase):
             employee['team']='B'
             self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,2))['id'],'night')
             self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,9))['id'],'day')
-            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?)',('team-date',None,'B','2026-10-09','2026-10-09','night-ot'))
+            db.execute('INSERT INTO assignments (id,employee_id,team,start_date,end_date,schedule_id) VALUES(?,?,?,?,?,?)',('team-date',None,'B','2026-10-09','2026-10-09','night-ot'))
             self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,9))['id'],'night-ot')
-            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?)',('person-date','A',None,'2026-10-09','2026-10-09','normal'))
+            db.execute('INSERT INTO assignments (id,employee_id,team,start_date,end_date,schedule_id) VALUES(?,?,?,?,?,?)',('person-date','A',None,'2026-10-09','2026-10-09','normal'))
             self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,9))['id'],'normal')
 
     def test_fixed_team_changes_do_not_rewrite_saved_attendance(self):
@@ -382,6 +429,92 @@ class HttpTests(unittest.TestCase):
         for invalid in ({'team_schedules':{'C':'day'}},{'team_schedules':{'A':'missing'}},{'team_schedules':[]},{'team_overtime':{'A':'yes'}}):
             self.assertEqual(self.request('/api/settings','PUT',invalid)[0],400)
         self.assertEqual(self.request('/api/state')[1]['settings']['team_schedules'],body['team_schedules'])
+
+    def test_group_settings_profile_fields_and_order_persist_with_validation(self):
+        self.login()
+        person={'id':'123','name':'Manager','department':'OFFICE','office_department':'HR','position':'GENERAL MANAGER','team':'N','schedule_id':'normal'}
+        self.assertEqual(self.request('/api/employees','POST',person)[0],200)
+        config={'team_schedules':{'A':'day','B':'night','N':'normal'},'team_overtime':{'A':True},'rotation':None}
+        body={'schedule_groups':{'section:CONVERSION':config,'section:ROLL MAKING':{**config,'team_overtime':{'A':False}}},'employee_order':['123'],'employee_sort':'manual'}
+        self.assertEqual(self.request('/api/settings','PUT',body)[0],200)
+        state=self.request('/api/state')[1]
+        self.assertEqual(state['employees'][0]['office_department'],'HR')
+        self.assertEqual(state['settings']['employee_order'],['123'])
+        invalid=[{'schedule_groups':[]},{'schedule_groups':{'section:WRONG':config}},
+                 {'schedule_groups':{'section:CONVERSION':{**config,'team_overtime':{'A':'yes'}}}},
+                 {'schedule_groups':{'section:CONVERSION':{**config,'rotation':[]}}},
+                 {'employee_order':['123','123']},{'employee_order':['unknown']},{'employee_sort':'wrong'}]
+        for value in invalid:
+            self.assertEqual(self.request('/api/settings','PUT',value)[0],400,value)
+        self.assertEqual(self.request('/api/state')[1]['settings']['schedule_groups'],body['schedule_groups'])
+        self.assertEqual(self.request('/api/employees/123','PUT',{'department':'PRODUCTION','production_section':'ROLL MAKING'})[0],200)
+        self.assertEqual(self.request('/api/employees/123','PUT',{'production_section':'wrong'})[0],400)
+        self.assertEqual(self.request('/api/settings','PUT',{'schedule_groups':{}})[0],200)
+
+    def test_team_date_assignments_can_differ_between_sections_but_not_overlap_in_one_scope(self):
+        self.login()
+        body={'team':'A','start_date':'2026-10-01','end_date':'2026-10-07','schedule_id':'day','scope':'section:CONVERSION'}
+        self.assertEqual(self.request('/api/assignments','POST',body)[0],200)
+        self.assertEqual(self.request('/api/assignments','POST',{**body,'scope':'section:ROLL MAKING','schedule_id':'night'})[0],200)
+        self.assertEqual(self.request('/api/assignments','POST',body)[0],409)
+        self.assertEqual(self.request('/api/assignments','POST',{**body,'scope':'line:FC'})[0],200)
+        self.assertEqual(self.request('/api/assignments','POST',{**body,'scope':'bad'})[0],400)
+
+    def test_attention_covers_all_dates_and_resolves_only_after_the_actual_fix(self):
+        self.login()
+        for eid,schedule in [('issue-one',None),('issue-two','normal')]:
+            self.request('/api/employees','POST',{'id':eid,'name':eid,'team':'N','schedule_id':schedule})
+        def scan(eid,when):
+            return self.server.store.scan({'employee_id':eid,'timestamp':when,'event_id':str(uuid.uuid4())},'test')
+        first=scan('issue-one','2025-01-01T08:00:00+08:00')
+        scan('issue-one','2025-01-01T18:00:00+08:00')
+        second=scan('issue-two','2025-01-02T07:45:00+08:00')
+        review=scan('issue-two','2025-01-01T07:45:00+08:00')
+        expected={'hours':1,'attendance':2,'scans':1,'total':4}
+        self.assertEqual(self.request('/api/state')[1]['attention_summary'],expected)
+        self.assertEqual(self.request('/api/attendance?from=2026-10-10&to=2026-10-10')[1]['sessions'],[])
+        first_page=self.request('/api/attention?category=attendance&limit=1')[1]
+        self.assertEqual(first_page['summary'],expected)
+        self.assertEqual(first_page['items'][0]['id'],first['session_id'])
+        second_page=self.request('/api/attention?category=attendance&limit=1&offset=1')[1]
+        self.assertTrue(second_page['items'][0]['stale_session'])
+        with self.server.store.connect() as db:
+            db.execute('UPDATE sessions SET flags=? WHERE id=?',('["late_arrival","outside_scheduled_hours"]',second['session_id']))
+        self.assertEqual(self.request('/api/state')[1]['attention_summary'],expected)  # flags + stale = one attendance issue
+        self.assertEqual(self.request('/api/attention?category=hours')[1]['items'][0]['id'],'issue-one')
+        self.request('/api/employees/issue-one','PUT',{'schedule_id':'normal'})
+        self.assertEqual(self.request('/api/state')[1]['attention_summary']['total'],3)  # past flags remain
+        for session in [*first_page['items'],*second_page['items']]:
+            body={'time_in':session['time_in'],'time_out':session['time_out'] or '2025-01-02T17:40:00+08:00','work_date':session['work_date'],'resolve_flags':True,'reason':'Checked original attendance record'}
+            self.assertEqual(self.request('/api/attendance/'+session['id'],'PUT',body)[0],200)
+        self.assertEqual(self.request('/api/state')[1]['attention_summary']['total'],1)
+        pending=self.request('/api/attention?category=scans')[1]['items']
+        self.assertEqual(len(pending),1)
+        self.assertEqual(json.loads(pending[0]['result'])['action'],'REVIEW')
+        self.assertEqual(self.request('/api/review/'+pending[0]['id'],'POST',{'reason':'Checked older scan against saved attendance'})[0],200)
+        self.assertEqual(self.request('/api/state')[1]['attention_summary']['total'],0)
+        self.assertEqual(self.request('/api/attention?category=attendance')[1]['items'],[])
+
+    def test_attention_pagination_reaches_every_issue_and_validates_parameters(self):
+        self.login()
+        with self.server.store.connect() as db:
+            for index in range(105):
+                self.server.store.insert_employee(db,{'id':'missing-'+str(index),'name':f'Employee {index:03d}','schedule_id':None})
+        pages=[self.request('/api/attention?category=hours&limit=50&offset='+str(offset))[1] for offset in (0,50,100)]
+        self.assertEqual([len(page['items']) for page in pages],[50,50,5])
+        self.assertEqual(len({item['id'] for page in pages for item in page['items']}),105)
+        for query in ('category=wrong','limit=101','limit=0','offset=-1','offset=abc'):
+            self.assertEqual(self.request('/api/attention?'+query)[0],400)
+        last=self.request('/api/attention?category=hours&offset=99999')[1]
+        self.assertEqual(last['offset'],100)
+        self.assertEqual(last['summary']['total'],105)
+
+    def test_attention_is_only_available_to_administrators(self):
+        self.assertEqual(self.request('/api/attention')[0],401)
+        self.login()
+        for scope in ('kiosk','integration'):
+            token=self.request('/api/devices','POST',{'name':'Test '+scope,'scope':scope})[1]['token']
+            self.assertEqual(self.request('/api/attention',headers={'Authorization':'Bearer '+token})[0],403)
 
     def test_manual_correction_requires_reason_and_preserves_audit(self):
         self.login()

@@ -135,7 +135,9 @@ npm run build
 
 ## Control centre
 
-Open **Control centre** for clear Team A/B/N Day, Night and OT controls, automatic A/B rotation, exact working-hour templates and links to the admin tools. Employee profile editing previews the hours of the selected team automatically. See the [team setup guide](ai-pc/README.md#control-centre-team-shifts-and-ot).
+Open **Control centre** for separate Conversion and Roll Making Team A/B/N hours, OT and rotation settings, with optional department/production-line overrides. Production lines automatically belong to Conversion except Roll Making; profiles can override the section. Office profiles have a separate **Office department** field so managers stay on the Office board while showing the department they represent. **Employee display order** saves either the full position hierarchy, manual up/down ordering, or name sorting for the TV board and employee directory. Employee profile editing previews the selected group's team hours automatically. See the [team setup guide](ai-pc/README.md#control-centre-team-shifts-and-ot).
+
+The overview's **Needs attention** card opens a breakdown of missing working hours, flagged/old open attendance sessions and pending scan reviews across all dates. Each issue explains the problem and opens the affected employee or exact record; links also select the correct attendance-log dates. See the [issue review guide](ai-pc/README.md#needs-attention-see-the-issue-and-open-the-fix).
 
 ## Admin attendance controls and TV photos
 

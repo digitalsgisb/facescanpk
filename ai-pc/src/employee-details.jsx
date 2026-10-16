@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {X} from 'lucide-react';
+import {productionSection} from './organisation.js';
 
 const clockTime = value => value ? new Intl.DateTimeFormat('en-MY', {timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)) + ' MYT' : 'No open session';
 
@@ -18,6 +19,8 @@ export function EmployeeDetails({employee, onClose}) {
   if (!employee) return null;
   const details = [
     ['Employee ID', employee.id], ['Department', employee.department || 'Unassigned'],
+    ...(productionSection(employee)?[['Production section',productionSection(employee)]]:[]),
+    ...(employee.department?.trim().toUpperCase()==='OFFICE'?[['Office department',employee.office_department||'Unassigned']]:[]),
     ['Production line', employee.line || 'Unassigned'], ['Position', employee.position || 'Unassigned'],
     ['Team', employee.team || 'Unassigned'], ['Working hours', employee.effective_schedule ? `${employee.effective_schedule.start} – ${employee.effective_schedule.end}` : 'Unassigned'],
     ['Current clock-in', clockTime(employee.session?.time_in)],

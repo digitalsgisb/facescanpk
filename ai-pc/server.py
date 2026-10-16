@@ -25,7 +25,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 BASE = Path(__file__).resolve().parent
 KL = timezone(timedelta(hours=8), 'Asia/Kuala_Lumpur')
 SESSION_COOKIE_AGE = 400 * 24 * 3600  # Browser persistence, renewed on authenticated requests.
-FIELDS = ('id', 'name', 'nickname', 'department', 'position', 'line', 'team', 'photo_url', 'schedule_id', 'active')
+FIELDS = ('id', 'name', 'nickname', 'department', 'position', 'line', 'team', 'photo_url', 'schedule_id', 'production_section', 'office_department', 'active')
 TEMPLATES = [
     ('normal', 'Normal working hours', '07:45', '17:40', 0),
     ('day', 'Day shift', '08:00', '16:15', 0),
@@ -33,6 +33,10 @@ TEMPLATES = [
     ('night', 'Night shift', '16:15', '00:30', 0),
     ('night-ot', 'Night shift + OT', '20:00', '08:00', 1),
 ]
+PENDING_REVIEW = """json_extract(v.result,'$.action')='REVIEW'
+    AND NOT EXISTS(SELECT 1 FROM audit a WHERE a.entity_id=v.id AND a.action='scan_reviewed')"""
+ATTENTION_SESSION = """(json_array_length(s.flags)>0 OR
+    (s.time_out IS NULL AND julianday(s.time_in)<julianday(?)))"""
 
 
 class Problem(Exception):
@@ -67,6 +71,51 @@ def digest(value):
 
 def password_hash(password, salt):
     return hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(salt), 600_000).hex()
+
+
+def schedule_scopes(employee):
+    e = dict(employee)
+    department = (e.get('department') or '').strip().upper()
+    scopes = []
+    if department == 'PRODUCTION':
+        line = (e.get('line') or '').strip()
+        section = e.get('production_section') or ('ROLL MAKING' if line.upper() == 'ROLL MAKING' else 'CONVERSION')
+        if line:
+            scopes.append('line:'+line)
+        scopes.append('section:'+section)
+    if department:
+        scopes.append('department:'+department)
+    return scopes
+
+
+def validate_scope(scope):
+    if not isinstance(scope, str) or len(scope)>150 or not re.fullmatch(r'(section:(CONVERSION|ROLL MAKING)|(?:line|department):[^\r\n]+)', scope):
+        raise Problem('Choose a department, production section or line.')
+
+
+def validate_team_settings(db, config):
+    if not isinstance(config, dict) or set(config)-{'team_schedules','team_overtime','rotation'}:
+        raise Problem('Invalid team settings.')
+    for key in ('team_schedules','team_overtime'):
+        value=config.get(key,{})
+        if not isinstance(value,dict) or any(team not in ('A','B','N') for team in value):
+            raise Problem('Choose working hours for teams A, B or N.')
+        for choice in value.values():
+            if key=='team_overtime':
+                if not isinstance(choice,bool):
+                    raise Problem('Overtime must be on or off for each team.')
+            elif choice is not None and (not isinstance(choice,str) or not db.execute('SELECT 1 FROM schedules WHERE id=?',(choice,)).fetchone()):
+                raise Problem('Choose an existing team schedule.')
+    rotation=config.get('rotation')
+    if rotation is not None:
+        if not isinstance(rotation,dict):
+            raise Problem('Invalid rotation.')
+        day(rotation.get('anchor_date'))
+        if type(rotation.get('interval_days')) is not int or not 1<=rotation['interval_days']<=60:
+            raise Problem('Rotation interval must be between 1 and 60 days.')
+        ids=rotation.get('schedule_ids',[])
+        if not isinstance(ids,list) or len(ids)!=2 or any(not isinstance(s,str) or not db.execute('SELECT 1 FROM schedules WHERE id=?',(s,)).fetchone() for s in ids):
+            raise Problem('Choose two rotation schedules.')
 
 
 class Store:
@@ -109,10 +158,18 @@ class Store:
             CREATE TABLE IF NOT EXISTS audit (
               id INTEGER PRIMARY KEY AUTOINCREMENT, occurred_at TEXT NOT NULL, actor TEXT NOT NULL,
               action TEXT NOT NULL, entity_id TEXT NOT NULL, before_json TEXT, after_json TEXT);
+            CREATE INDEX IF NOT EXISTS audit_entity_action ON audit(entity_id,action);
+            CREATE INDEX IF NOT EXISTS review_events ON events(occurred_at,id) WHERE json_extract(result,'$.action')='REVIEW';
             CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK(id=1), salt TEXT NOT NULL, password TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS attendance_access (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
             ''')
+            columns={r['name'] for r in db.execute('PRAGMA table_info(employees)')}
+            for column in ('production_section','office_department'):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE employees ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+            if 'scope' not in {r['name'] for r in db.execute('PRAGMA table_info(assignments)')}:
+                db.execute("ALTER TABLE assignments ADD COLUMN scope TEXT NOT NULL DEFAULT ''")
             # Upgrade still-valid sessions; never revive a session that already expired.
             db.execute('UPDATE auth_sessions SET expires=0 WHERE expires>?', (time.time(),))
             for s in TEMPLATES:
@@ -121,7 +178,8 @@ class Store:
                                'early_out_minutes':120, 'late_out_minutes':120,
                                'max_open_hours':20, 'late_grace_minutes':15,
                                'early_departure_grace_minutes':15, 'rotation':None,
-                               'team_schedules':{}, 'team_overtime':{}}.items():
+                               'team_schedules':{}, 'team_overtime':{}, 'schedule_groups':{},
+                               'employee_sort':'position', 'employee_order':[]}.items():
                 db.execute('INSERT OR IGNORE INTO settings VALUES(?,?)', (key, json.dumps(value)))
             if seed and not db.execute('SELECT 1 FROM employees LIMIT 1').fetchone():
                 seed_path = BASE / 'data/employees.json'
@@ -183,22 +241,57 @@ class Store:
 
     def insert_employee(self, db, e):
         values = [e.get(f, '') for f in FIELDS[:-1]] + [int(e.get('active', True)), now_iso()]
-        db.execute('INSERT INTO employees VALUES(?,?,?,?,?,?,?,?,?,?,?)', values)
+        db.execute('INSERT INTO employees ('+','.join(FIELDS)+',updated_at) VALUES('+','.join('?' for _ in values)+')', values)
 
     def settings(self, db):
         return {r['key']:json.loads(r['value']) for r in db.execute('SELECT * FROM settings')}
 
+    def attention_summary(self, db, employees=None):
+        employees=self.employees(db) if employees is None else employees
+        cutoff=(datetime.now(KL)-timedelta(hours=self.settings(db)['max_open_hours'])).isoformat()
+        counts={'hours':sum(1 for employee in employees if employee['active'] and not employee['effective_schedule']),
+                'attendance':db.execute('SELECT COUNT(*) FROM sessions s WHERE '+ATTENTION_SESSION,(cutoff,)).fetchone()[0],
+                'scans':db.execute('SELECT COUNT(*) FROM events v WHERE '+PENDING_REVIEW).fetchone()[0]}
+        return {**counts,'total':sum(counts.values())}
+
+    def attention_page(self, db, category, offset, limit):
+        summary=self.attention_summary(db)
+        # Clamp after resolution so an emptied last page returns the preceding page.
+        offset=min(offset,max(0,((summary[category]-1)//limit)*limit))
+        if category=='hours':
+            people=sorted((e for e in self.employees(db) if e['active'] and not e['effective_schedule']),key=lambda e:((e['nickname'] or e['name']).casefold(),e['id']))
+            items=people[offset:offset+limit]
+        elif category=='attendance':
+            cutoff=(datetime.now(KL)-timedelta(hours=self.settings(db)['max_open_hours'])).isoformat()
+            items=[dict(row) for row in db.execute('''SELECT s.*,COALESCE(p.name,e.name) AS name,
+                COALESCE(p.nickname,e.nickname) AS nickname,COALESCE(p.department,e.department) AS department,
+                COALESCE(p.line,e.line) AS line,COALESCE(p.team,e.team) AS team
+                FROM sessions s JOIN employees e ON e.id=s.employee_id
+                LEFT JOIN employee_snapshots p ON p.session_id=s.id WHERE '''+ATTENTION_SESSION+
+                ' ORDER BY s.time_in ASC,s.id LIMIT ? OFFSET ?',(cutoff,limit,offset))]
+            for item in items:
+                item['stale_session']=not item['time_out'] and stamp(item['time_in'])<stamp(cutoff)
+        else:
+            items=[dict(row) for row in db.execute('''SELECT v.*,e.name,e.nickname,e.department,e.line,e.team
+                FROM events v JOIN employees e ON e.id=v.employee_id WHERE '''+PENDING_REVIEW+
+                ' ORDER BY v.occurred_at ASC,v.id LIMIT ? OFFSET ?',(limit,offset))]
+        return {'summary':summary,'category':category,'items':items,'offset':offset,'limit':limit,'total':summary[category]}
+
     def resolve_schedule(self, db, e, work_date):
-        for field, value in [('employee_id', e['id']), ('team', e['team'])]:
-            row = db.execute(f'SELECT schedule_id FROM assignments WHERE {field}=? AND start_date<=? AND end_date>=? ORDER BY start_date DESC LIMIT 1',
-                             (value, str(work_date), str(work_date))).fetchone()
-            if row:
-                return db.execute('SELECT * FROM schedules WHERE id=?', (row['schedule_id'],)).fetchone()
+        scopes=schedule_scopes(e)
+        rows=list(db.execute('SELECT * FROM assignments WHERE start_date<=? AND end_date>=? AND (employee_id=? OR ((employee_id IS NULL OR employee_id=\'\') AND team=?)) ORDER BY start_date DESC',
+                             (str(work_date),str(work_date),e['id'],e['team'])))
+        personal=next((row for row in rows if row['employee_id']==e['id']),None)
+        team=next((row for scope in [*scopes,''] for row in rows if not row['employee_id'] and row['team']==e['team'] and row['scope']==scope),None)
+        override=personal or team
+        if override:
+            return db.execute('SELECT * FROM schedules WHERE id=?', (override['schedule_id'],)).fetchone()
         settings = self.settings(db)
-        rotation = settings['rotation']
+        settings=next((settings['schedule_groups'][scope] for scope in scopes if scope in settings['schedule_groups']),settings)
+        rotation = settings.get('rotation')
         def team_hours(schedule_id):
             base = schedule_id.removesuffix('-ot') if schedule_id else None
-            overtime = settings['team_overtime']
+            overtime = settings.get('team_overtime',{})
             if base in ('day','night') and e['team'] in overtime:
                 schedule_id = base+('-ot' if overtime[e['team']] else '')
             return db.execute('SELECT * FROM schedules WHERE id=?', (schedule_id,)).fetchone()
@@ -207,7 +300,7 @@ class Store:
             if e['team'] == 'B':
                 index = 1-index
             return team_hours(rotation['schedule_ids'][index])
-        team_schedule = settings['team_schedules'].get(e['team'])
+        team_schedule = settings.get('team_schedules',{}).get(e['team'])
         if team_schedule:
             return team_hours(team_schedule)
         return db.execute('SELECT * FROM schedules WHERE id=?', (e['schedule_id'],)).fetchone()
@@ -226,6 +319,8 @@ class Store:
             raise Problem('Full name is required.')
         if e.get('team', '') not in ('', 'A', 'B', 'N'):
             raise Problem('Select team A, B, N or unassigned.')
+        if e.get('production_section','') not in ('','CONVERSION','ROLL MAKING'):
+            raise Problem('Choose Conversion, Roll Making or automatic section.')
         for f in FIELDS[:-1]:
             if e.get(f) is not None and (not isinstance(e[f], str) or len(e[f]) > 2000):
                 raise Problem('Employee field is invalid or too long.')
@@ -484,6 +579,18 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'sessions':self.sessions(db, query)})
                 if scope != 'admin':
                     raise Problem('Administrator access required.',403)
+                if route == '/api/attention' and method == 'GET':
+                    category=query.get('category',['hours'])[0]
+                    if category not in ('hours','attendance','scans'):
+                        raise Problem('Choose a valid issue category.')
+                    try:
+                        offset=int(query.get('offset',['0'])[0])
+                        limit=int(query.get('limit',['50'])[0])
+                    except (ValueError,TypeError):
+                        raise Problem('Invalid issue page.')
+                    if offset<0 or not 1<=limit<=100:
+                        raise Problem('Invalid issue page.')
+                    return self.send(self.store.attention_page(db,category,offset,limit))
                 if route == '/api/clock-access' and method == 'GET':
                     access = db.execute('SELECT expires FROM attendance_access WHERE token_hash=? AND expires>?',
                                         (digest(self.session_token), time.time())).fetchone()
@@ -629,7 +736,8 @@ class Handler(BaseHTTPRequestHandler):
                 WHERE s.work_date BETWEEN ? AND ? ORDER BY s.time_in DESC''', (start,end))]
 
     def state(self, db):
-        return {'employees':self.store.employees(db),
+        employees=self.store.employees(db)
+        return {'employees':employees,'attention_summary':self.store.attention_summary(db,employees),
                 'schedules':[dict(r) for r in db.execute('SELECT * FROM schedules')],
                 'assignments':[dict(r) for r in db.execute('SELECT * FROM assignments ORDER BY start_date DESC')],
                 'settings':self.store.settings(db),
@@ -707,6 +815,11 @@ class Handler(BaseHTTPRequestHandler):
                 raise Problem('Choose a roster period of up to one year.')
             employee = data.get('employee_id') or None
             team = data.get('team') if not employee else None
+            scope = data.get('scope','') if not employee else ''
+            if not isinstance(scope,str):
+                raise Problem('Choose a valid assignment group.')
+            if scope:
+                validate_scope(scope)
             if employee:
                 if not db.execute('SELECT 1 FROM employees WHERE id=? AND active=1',(employee,)).fetchone():
                     raise Problem('Employee not found.')
@@ -715,10 +828,10 @@ class Handler(BaseHTTPRequestHandler):
             if not db.execute('SELECT 1 FROM schedules WHERE id=?',(data.get('schedule_id'),)).fetchone():
                 raise Problem('Choose a schedule.')
             field,value = ('employee_id',employee) if employee else ('team',team)
-            if db.execute(f'SELECT 1 FROM assignments WHERE {field}=? AND start_date<=? AND end_date>=?',(value,str(end),str(start))).fetchone():
+            if db.execute(f'SELECT 1 FROM assignments WHERE {field}=? AND scope=? AND start_date<=? AND end_date>=?',(value,scope,str(end),str(start))).fetchone():
                 raise Problem('This period overlaps another assignment. Remove the earlier assignment first.',409)
             aid=str(uuid.uuid4())
-            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?)',(aid,employee,team,str(start),str(end),data['schedule_id']))
+            db.execute('INSERT INTO assignments (id,employee_id,team,start_date,end_date,schedule_id,scope) VALUES(?,?,?,?,?,?,?)',(aid,employee,team,str(start),str(end),data['schedule_id'],scope))
             self.store.audit(db,'admin','roster_assigned',aid,None,data)
             return {'ok':True}
         if route.startswith('/api/assignments/') and method == 'DELETE':
@@ -731,26 +844,27 @@ class Handler(BaseHTTPRequestHandler):
             return {'ok':True}
         if route == '/api/settings' and method == 'PUT':
             previous=self.store.settings(db)
+            validate_team_settings(db,{key:data.get(key,previous[key]) for key in ('team_schedules','team_overtime','rotation')})
             for key,value in data.items():
                 if key not in previous:
                     raise Problem('Unknown setting.')
-                if key in ('team_schedules','team_overtime'):
-                    if not isinstance(value,dict) or any(team not in ('A','B','N') for team in value):
-                        raise Problem('Choose working hours for teams A, B or N.')
-                    for team,choice in value.items():
-                        if key=='team_overtime':
-                            if not isinstance(choice,bool):
-                                raise Problem('Overtime must be on or off for each team.')
-                        elif choice is not None and (not isinstance(choice,str) or not db.execute('SELECT 1 FROM schedules WHERE id=?',(choice,)).fetchone()):
-                            raise Problem('Choose an existing team schedule.')
-                elif key=='rotation':
-                    if value is not None:
-                        day(value.get('anchor_date'))
-                        if not isinstance(value.get('interval_days'),int) or not 1<=value['interval_days']<=60:
-                            raise Problem('Rotation interval must be between 1 and 60 days.')
-                        ids=value.get('schedule_ids',[])
-                        if len(ids)!=2 or any(not db.execute('SELECT 1 FROM schedules WHERE id=?',(s,)).fetchone() for s in ids):
-                            raise Problem('Choose two rotation schedules.')
+                if key in ('team_schedules','team_overtime','rotation'):
+                    pass  # Validated together above, including partial updates.
+                elif key=='schedule_groups':
+                    if not isinstance(value,dict) or len(value)>200:
+                        raise Problem('Invalid department working hours.')
+                    for scope,config in value.items():
+                        validate_scope(scope)
+                        validate_team_settings(db,config)
+                elif key=='employee_sort':
+                    if value not in ('position','manual','name'):
+                        raise Problem('Choose position, manual or name sorting.')
+                elif key=='employee_order':
+                    if not isinstance(value,list) or len(value)>10000 or any(not isinstance(eid,str) for eid in value) or len(set(value))!=len(value):
+                        raise Problem('Invalid employee order.')
+                    known={row['id'] for row in db.execute('SELECT id FROM employees')}
+                    if any(eid not in known for eid in value):
+                        raise Problem('Employee order includes an unknown employee.')
                 elif not isinstance(value,int) or not 0<=value<=1440 or (key=='max_open_hours' and not 1<=value<=48):
                     raise Problem('Invalid timing setting.')
                 db.execute('UPDATE settings SET value=? WHERE key=?',(json.dumps(value),key))

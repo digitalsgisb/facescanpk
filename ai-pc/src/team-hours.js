@@ -1,3 +1,4 @@
+import {scheduleScopes} from './organisation.js';
 export const malaysiaToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 export function teamHours(settings,team,date=malaysiaToday()){
   const rotation=settings.rotation;
@@ -13,8 +14,11 @@ export function teamHours(settings,team,date=malaysiaToday()){
   return {id,source};
 }
 export function employeeHours(employee,state,date=malaysiaToday()){
+  const scopes=scheduleScopes(employee),scope=scopes.find(key=>Object.hasOwn(state.settings.schedule_groups||{},key));
+  const settings=scope?state.settings.schedule_groups[scope]:state.settings;
   const assignments=(state.assignments||[]).filter(a=>a.start_date<=date&&a.end_date>=date).sort((a,b)=>b.start_date.localeCompare(a.start_date));
-  const personal=assignments.find(a=>a.employee_id===employee.id),team=assignments.find(a=>a.team===employee.team);
-  const effective=personal?{id:personal.schedule_id,source:'Employee date override'}:team?{id:team.schedule_id,source:'Team date override'}:teamHours(state.settings,employee.team,date)||{id:employee.schedule_id,source:'Individual fallback'};
+  const personal=assignments.find(a=>a.employee_id===employee.id),team=[...scopes,''].map(key=>assignments.find(a=>!a.employee_id&&a.team===employee.team&&(a.scope||'')===key)).find(Boolean);
+  const hours=teamHours(settings,employee.team,date);
+  const effective=personal?{id:personal.schedule_id,source:'Employee date override'}:team?{id:team.schedule_id,source:'Team date override'+(team.scope?' · '+team.scope.split(':').slice(1).join(':'):' · Company-wide')}:hours?{...hours,source:(scope?scope.split(':').slice(1).join(':')+' · ':'Company · ')+hours.source}:{id:employee.schedule_id,source:'Individual fallback'};
   return {...effective,schedule:state.schedules.find(s=>s.id===effective.id)||null};
 }
