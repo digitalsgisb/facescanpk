@@ -120,7 +120,8 @@ class Store:
             for key, value in {'cooldown_seconds':300, 'early_in_minutes':120, 'late_in_minutes':120,
                                'early_out_minutes':120, 'late_out_minutes':120,
                                'max_open_hours':20, 'late_grace_minutes':15,
-                               'early_departure_grace_minutes':15, 'rotation':None}.items():
+                               'early_departure_grace_minutes':15, 'rotation':None,
+                               'team_schedules':{}, 'team_overtime':{}}.items():
                 db.execute('INSERT OR IGNORE INTO settings VALUES(?,?)', (key, json.dumps(value)))
             if seed and not db.execute('SELECT 1 FROM employees LIMIT 1').fetchone():
                 seed_path = BASE / 'data/employees.json'
@@ -193,12 +194,22 @@ class Store:
                              (value, str(work_date), str(work_date))).fetchone()
             if row:
                 return db.execute('SELECT * FROM schedules WHERE id=?', (row['schedule_id'],)).fetchone()
-        rotation = self.settings(db)['rotation']
+        settings = self.settings(db)
+        rotation = settings['rotation']
+        def team_hours(schedule_id):
+            base = schedule_id.removesuffix('-ot') if schedule_id else None
+            overtime = settings['team_overtime']
+            if base in ('day','night') and e['team'] in overtime:
+                schedule_id = base+('-ot' if overtime[e['team']] else '')
+            return db.execute('SELECT * FROM schedules WHERE id=?', (schedule_id,)).fetchone()
         if rotation and e['team'] in ('A', 'B') and work_date >= day(rotation['anchor_date']):
             index = ((work_date-day(rotation['anchor_date'])).days // rotation['interval_days']) % 2
             if e['team'] == 'B':
                 index = 1-index
-            return db.execute('SELECT * FROM schedules WHERE id=?', (rotation['schedule_ids'][index],)).fetchone()
+            return team_hours(rotation['schedule_ids'][index])
+        team_schedule = settings['team_schedules'].get(e['team'])
+        if team_schedule:
+            return team_hours(team_schedule)
         return db.execute('SELECT * FROM schedules WHERE id=?', (e['schedule_id'],)).fetchone()
 
     def planned(self, schedule, work_date):
@@ -723,7 +734,16 @@ class Handler(BaseHTTPRequestHandler):
             for key,value in data.items():
                 if key not in previous:
                     raise Problem('Unknown setting.')
-                if key=='rotation':
+                if key in ('team_schedules','team_overtime'):
+                    if not isinstance(value,dict) or any(team not in ('A','B','N') for team in value):
+                        raise Problem('Choose working hours for teams A, B or N.')
+                    for team,choice in value.items():
+                        if key=='team_overtime':
+                            if not isinstance(choice,bool):
+                                raise Problem('Overtime must be on or off for each team.')
+                        elif choice is not None and (not isinstance(choice,str) or not db.execute('SELECT 1 FROM schedules WHERE id=?',(choice,)).fetchone()):
+                            raise Problem('Choose an existing team schedule.')
+                elif key=='rotation':
                     if value is not None:
                         day(value.get('anchor_date'))
                         if not isinstance(value.get('interval_days'),int) or not 1<=value['interval_days']<=60:

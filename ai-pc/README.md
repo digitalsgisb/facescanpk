@@ -24,9 +24,23 @@ The server enforces the password unlock on both individual and batch clock endpo
 
 **TV fullscreen** now opens **Large photos**: native 190×68 pixel cards with 44×44 photos and 14-pixel names. It rotates through grouped employee pages every 15 seconds. Use **Previous / Next** or **Pause rotation**; opening employee details pauses rotation too. The details popup has a larger portrait. All active employees remain available across the pages.
 
-Use **Compact overview** if you need the full workforce on one screen. Both views render text and photos at native CSS sizes, without scaling the entire board with a transform. The compact view necessarily uses smaller cards; large photos need more than one page on a 1366×768 TV.
+Use **Compact overview** if you need the full workforce on one screen. Large photos renders text and photos at native CSS sizes. Compact overview automatically scales the board to fit everyone without scrolling and necessarily uses smaller cards; large photos need more than one page on a 1366×768 TV.
 
 A photo of a TV can also show camera focus and screen-pattern interference. App changes cannot recover detail missing from an original photo or compensate for the display scaling its input. Keep the browser zoom at 100% and use the TV panel's actual native output resolution; the existing 1366×768 example is only correct for a panel using that resolution. If it remains blurry, collect the Pi's `wlr-randr` output before changing its display mode.
+
+## Control centre: team shifts and OT
+
+Open **Control centre** from the sidebar. It brings team hours, overtime, schedule templates and links to the other admin tools together.
+
+- **Fixed teams:** choose **Day**, **Night** or **Normal** for each team. The separate **Overtime** switch selects the matching Day + OT or Night + OT hours. The time preview shows exactly what will apply.
+- **Automatic A/B swap:** choose A and B's starting shifts, a start date and the number of days between swaps. Each team's OT setting stays with that team when the shifts swap. Team N keeps its own fixed hours.
+- Press **Save team working hours** to apply the setup. Until saved, the controls are a preview. **Individual employee defaults** leaves a team's existing personal schedules in use.
+- In **Employees → Profile**, changing the Team immediately updates **Working hours today** in the editor. Individual fallback hours are used only when no higher-priority setting applies.
+- Use **Working-hour templates** to edit exact start/end times, or **Date override** for an employee/team exception.
+
+Schedule priority is: employee date override → team date override → A/B rotation → team default → individual fallback. Team OT affects rotation/default hours; explicit date overrides retain their chosen schedule. Existing attendance sessions keep their saved planned times.
+
+The workspace stays white with black animated headers and flat green/red attendance cards. **Compact overview** automatically scales the full workforce into its screen area without scrolling. **Large photos** keeps readable native-size cards on rotating pages.
 
 ## Stay signed in
 

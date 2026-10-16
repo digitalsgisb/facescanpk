@@ -101,6 +101,34 @@ class AttendanceTests(unittest.TestCase):
         with self.assertRaises(Problem):
             self.scan('A','2026-10-10T08:00:00+08:00')
 
+    def test_team_hours_and_overtime_follow_team_after_rotation(self):
+        from datetime import date
+        with self.store.connect() as db:
+            settings={'team_schedules':{'A':'day','B':'night'},'team_overtime':{'A':True,'B':False},
+                      'rotation':{'anchor_date':'2026-10-01','interval_days':7,'schedule_ids':['day','night']}}
+            for key,value in settings.items():
+                db.execute('UPDATE settings SET value=? WHERE key=?',(json.dumps(value),key))
+            employee=dict(db.execute("SELECT * FROM employees WHERE id='A'").fetchone())
+            self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,2))['id'],'day-ot')
+            self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,9))['id'],'night-ot')
+            employee['team']='B'
+            self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,2))['id'],'night')
+            self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,9))['id'],'day')
+            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?)',('team-date',None,'B','2026-10-09','2026-10-09','night-ot'))
+            self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,9))['id'],'night-ot')
+            db.execute('INSERT INTO assignments VALUES(?,?,?,?,?,?)',('person-date','A',None,'2026-10-09','2026-10-09','normal'))
+            self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,9))['id'],'normal')
+
+    def test_fixed_team_changes_do_not_rewrite_saved_attendance(self):
+        result=self.scan('A','2026-10-10T08:00:00+08:00')
+        with self.store.connect() as db:
+            original=dict(db.execute('SELECT * FROM sessions WHERE id=?',(result['session_id'],)).fetchone())
+            db.execute('UPDATE settings SET value=? WHERE key=?',(json.dumps({'A':'night'}),'team_schedules'))
+            employee=db.execute("SELECT * FROM employees WHERE id='A'").fetchone()
+            from datetime import date
+            self.assertEqual(self.store.resolve_schedule(db,employee,date(2026,10,10))['id'],'night')
+            self.assertEqual(dict(db.execute('SELECT * FROM sessions WHERE id=?',(result['session_id'],)).fetchone()),original)
+
     def test_timezone_required(self):
         with self.assertRaises(Problem):
             self.scan('A','2026-10-10T08:00:00')
@@ -342,6 +370,18 @@ class HttpTests(unittest.TestCase):
         self.login()
         self.assertEqual(self.request('/api/employees','POST',{'id':'bad_id','name':'Test'})[0],400)
         self.assertEqual(self.request('/api/employees')[1]['employees'],[])
+
+    def test_team_control_settings_validate_and_apply_automatically(self):
+        self.login()
+        self.request('/api/employees','POST',{'id':'123','name':'Test','team':'A','schedule_id':'normal'})
+        body={'team_schedules':{'A':'day','B':'night','N':'normal'},'team_overtime':{'A':True,'B':False,'N':False},'rotation':None}
+        self.assertEqual(self.request('/api/settings','PUT',body)[0],200)
+        self.assertEqual(self.request('/api/state')[1]['employees'][0]['effective_schedule']['id'],'day-ot')
+        self.request('/api/employees/123','PUT',{'team':'B'})
+        self.assertEqual(self.request('/api/state')[1]['employees'][0]['effective_schedule']['id'],'night')
+        for invalid in ({'team_schedules':{'C':'day'}},{'team_schedules':{'A':'missing'}},{'team_schedules':[]},{'team_overtime':{'A':'yes'}}):
+            self.assertEqual(self.request('/api/settings','PUT',invalid)[0],400)
+        self.assertEqual(self.request('/api/state')[1]['settings']['team_schedules'],body['team_schedules'])
 
     def test_manual_correction_requires_reason_and_preserves_audit(self):
         self.login()

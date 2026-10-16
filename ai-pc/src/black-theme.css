@@ -1,0 +1,16 @@
+/* Black headers, white workspace, and the original flat attendance colours. */
+:root{color-scheme:light;background:#fff}body,.app-shell,main{background:#fff}
+.topbar,.redesigned-board .board-header{background:linear-gradient(110deg,#050607,#282b30,#111315);background-size:220% 220%;border-color:#24272c;color:#fff;animation:black-header-flow 22s ease-in-out infinite;box-shadow:0 4px 18px #00000012}
+.topbar .breadcrumbs,.topbar .timezone{color:#b9bec7}.topbar .breadcrumbs strong{color:#fff}.topbar .date-pill{background:#ffffff08;color:#e4e7ec;border-color:#ffffff28}.topbar .tiny-avatar{background:#ffffff18;color:white}.topbar .icon-button{color:#e5e8ed}.topbar .secondary{background:#ffffff0b;border-color:#ffffff30;color:#f0f2f5}
+.redesigned-board .board-header{isolation:isolate;border-radius:9px}.redesigned-board .board-header h2,.redesigned-board .board-header small{color:#f4f5f8}.redesigned-board .board-header .secondary{background:#ffffff09;border-color:#ffffff30;color:#f0f2f5}.redesigned-board .board-header .primary{background:#fff;color:#15171b;border-color:#fff}
+.redesigned-board .board-header::before{background:linear-gradient(110deg,transparent 38%,#ffffff10 49%,transparent 62%);animation:black-header-shine 16s ease-in-out infinite}
+.board-page,.redesigned-board,.redesigned-board.tv-mode,.redesigned-board .board-stage,.redesigned-board .board-group{background:#fff}
+.redesigned-board .board-group .tv-employee{display:grid;grid-template-columns:var(--board-photo-size) minmax(0,1fr) auto;align-items:center;gap:6px;border:0;border-radius:4px;box-shadow:none;transition:background-color .25s}
+.redesigned-board .board-group .tv-employee.in{background:#22b85a}.redesigned-board .board-group .tv-employee.out{background:#c4252d}
+.redesigned-board .board-group .tv-employee .tv-card-name{min-width:0;overflow:hidden}.redesigned-board .board-group .tv-employee .tv-card-meta{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:20px;line-height:1.05;font-size:var(--board-position-size)}
+.tv-card-meta b{font-weight:800}.tv-card-meta em{position:static;font-style:normal;font-size:max(6px,calc(var(--board-position-size) - 2px));line-height:1.15;padding:1px 3px;border-radius:2px;background:#ffffffc0;color:#353535}
+.redesigned-board.native-overview-board.fit-all .board-stage{transform:var(--compact-transform,none)!important;transform-origin:top left}
+.redesigned-board.native-overview-board.fit-all .board-stage-window{overflow:hidden}
+.redesigned-board .board-group .tv-department-title{padding-left:10px;padding-right:10px;flex-shrink:0}.redesigned-board .board-group-teams{min-width:0}
+@keyframes black-header-flow{0%,100%{background-position:0% 40%}50%{background-position:100% 60%}}@keyframes black-header-shine{0%,100%{opacity:.2;transform:translateX(-10%)}50%{opacity:.7;transform:translateX(10%)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

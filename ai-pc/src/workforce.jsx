@@ -17,9 +17,9 @@ export function departmentOrder(a,b){
   return priority(a)-priority(b)||a.localeCompare(b);
 }
 function BoardEmployee({employee:e,onDetails}){
-  return <button className={'tv-employee '+(e.status==='IN'?'in':'out')} title={'View details for '+e.name} aria-label={'View details for '+e.name} onClick={()=>onDetails?.(e)}>
-    <Photo employee={e}/><div><strong>{e.nickname||e.name}</strong><small>{e.position||'Position not set'}</small></div><span>{e.status}</span>
-    {(e.position==='SUPERVISOR'||e.position==='LEADER')&&<i>{e.position==='SUPERVISOR'?'SUP':'LDR'}</i>}
+  const role=e.position==='SUPERVISOR'?'SUP':e.position==='LEADER'?'LDR':null;
+  return <button className={'tv-employee '+(e.status==='IN'?'in':'out')} title={e.name+' · '+(e.position||'Employee')+' · View details'} aria-label={'View details for '+e.name} onClick={()=>onDetails?.(e)}>
+    <Photo employee={e}/><div className="tv-card-name"><strong>{e.nickname||e.name}</strong><small>{e.position||'Employee'}</small></div><span className="tv-card-meta"><b>{e.status}</b>{role&&<em>{role}</em>}</span>
   </button>;
 }
 function boardGroupName(employee){
@@ -87,8 +87,11 @@ export function LiveBoard({employees,live,onDetails,soundControl,onAdminControls
       setDimensions(previous=>previous.width===width&&previous.height===height?previous:{width,height});
       if(!stage.current)return;
       if(mode!=='all'||!fit){stage.current.removeAttribute('style');return;}
-      const apply=height=>{const values={'--board-card-height':height+'px','--board-card-width':Math.max(84,Math.round(height*3.2))+'px','--board-photo-size':Math.max(16,height-10)+'px','--board-name-size':Math.max(8,Math.round(height*.28))+'px','--board-position-size':Math.max(7,Math.round(height*.22))+'px'};Object.entries(values).forEach(([key,value])=>stage.current.style.setProperty(key,value));};
-      let low=22,high=44,best=22;while(low<=high){const candidate=Math.floor((low+high)/2);apply(candidate);if(stage.current.scrollHeight<=height){best=candidate;low=candidate+1;}else high=candidate-1;}apply(best);
+      const values={'--board-card-height':'34px','--board-card-width':'112px','--board-photo-size':'21px','--board-name-size':'9px','--board-position-size':'7px'};
+      Object.entries(values).forEach(([key,value])=>stage.current.style.setProperty(key,value));
+      let low=.05,high=1;
+      for(let i=0;i<14;i++){const candidate=(low+high)/2;stage.current.style.width=(width/candidate)+'px';if(stage.current.scrollHeight*candidate<=height)low=candidate;else high=candidate;}
+      stage.current.style.width=(width/low)+'px';stage.current.style.setProperty('--compact-transform','scale('+low+')');
     })};
     const observer=new ResizeObserver(measure);observer.observe(root.current);observer.observe(windowRef.current);measure();return()=>{observer.disconnect();cancelAnimationFrame(frame)};
   },[fit,mode,groups]);

@@ -133,11 +133,15 @@ npm ci
 npm run build
 ```
 
+## Control centre
+
+Open **Control centre** for clear Team A/B/N Day, Night and OT controls, automatic A/B rotation, exact working-hour templates and links to the admin tools. Employee profile editing previews the hours of the selected team automatically. See the [team setup guide](ai-pc/README.md#control-centre-team-shifts-and-ot).
+
 ## Admin attendance controls and TV photos
 
 Open **Clock in / out** in the sidebar or **Admin controls** in the TV header. Enter the administrator password to unlock individual and batch clock actions for 30 minutes. The TV cards only show details. Select employees and use **Clock in selected / Clock out selected** for a batch. See the [admin controls guide](ai-pc/README.md#admin-clock-in--out-including-batches).
 
-TV fullscreen defaults to **Large photos**, rotating through readable grouped pages every 15 seconds. **Compact overview** keeps the full workforce in one view. Neither mode scales the entire board. See [larger photos and TV clarity](ai-pc/README.md#larger-photos-and-sharper-tv-text).
+TV fullscreen defaults to **Large photos**, rotating through readable grouped pages every 15 seconds. **Compact overview** keeps the full workforce in one view. Large photos uses native-size cards; Compact overview automatically fits everyone on one screen without scrolling. See [larger photos and TV clarity](ai-pc/README.md#larger-photos-and-sharper-tv-text).
 
 ## Displays
 
