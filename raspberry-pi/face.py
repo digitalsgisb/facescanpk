@@ -20,7 +20,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from kiosk_transport import ReliableTransport
 from kiosk_config import load_config
-from kiosk_keyboard import TouchKeyboard
 from kiosk_touch import enable_touch_buttons, trace_input
 from kiosk_instance import kiosk_instance, KioskAlreadyRunning
 from kiosk_vision import camera_worker, inference_worker, put_latest
@@ -115,6 +114,7 @@ class SmartAttendanceSystem:
         self.capture_timestamp = 0
         self.frame_sequence = 0
         self.reg_embedding_time = 0
+        self.reg_capture_started = 0
         self.candidate_uid = None
         self.candidate_count = 0
         self.latched_uid = None
@@ -141,7 +141,6 @@ class SmartAttendanceSystem:
         self.reg_face_embedding = None
         self.last_success_time = 0
         self._last_reset_key = None
-        self.active_entry = None          # which field the on-screen keyboard types into
 
         # --- THREADING (this is what kills the lag/freeze) ---
         self.frame_lock = threading.Lock()
@@ -222,6 +221,7 @@ class SmartAttendanceSystem:
         if hasattr(self, 'lbl_health'):
             healthy = network == 'Online' and self.camera_state == 'ready' and self.ai_state == 'ready'
             self.lbl_health.config(text=health, fg=GUI_ACCENT if healthy else GUI_WARN)
+        self.refresh_registration()
         if self._threads_running:
             self.root.after(1000, self.health_loop)
 
@@ -337,85 +337,137 @@ class SmartAttendanceSystem:
         panel = tk.Frame(self.frame_register, bg=GUI_PANEL, padx=14, pady=8)
         panel.pack(side="right", fill="both", expand=True)
         panel.columnconfigure(0, weight=1)
-        panel.rowconfigure(5, weight=1)
+        panel.rowconfigure(3, weight=1)
+        self.registration_selected = None
+        self.registration_page = 0
+        self.registration_registered = False
+        self.registration_signature = None
 
-        tk.Label(panel, text="Register face",
-                 font=("Arial", 16, "bold"), bg=GUI_PANEL, fg=GUI_INK,
-                 anchor='w').grid(row=0, column=0, sticky='ew', pady=(0, 6))
+        tk.Label(panel, text="Register face", font=("Arial", 16, "bold"),
+                 bg=GUI_PANEL, fg=GUI_INK, anchor='w').grid(row=0, column=0, sticky='ew')
+        self.lbl_registration_sync = tk.Label(panel, text="Loading employee list...",
+                 font=("Arial", 10), bg=GUI_PANEL, fg=GUI_WARN, anchor='w')
+        self.lbl_registration_sync.grid(row=1, column=0, sticky='ew', pady=(2, 4))
+        filters = tk.Frame(panel, bg=GUI_PANEL)
+        filters.grid(row=2, column=0, sticky='ew')
+        self.btn_registration_filter = tk.Button(filters, text="Show registered",
+                 command=self.toggle_registration_filter, font=("Arial", 11),
+                 bg='#781b28', fg=GUI_INK, relief='flat', height=2)
+        self.btn_registration_filter.pack(side='left', fill='x', expand=True)
+        self.lbl_registration_count = tk.Label(filters, bg=GUI_PANEL, fg=GUI_INK, font=("Arial", 10))
+        self.lbl_registration_count.pack(side='right', padx=6)
 
-        # USER ID (tap to select, use on-screen keyboard below)
-        tk.Label(panel, text="Employee ID", font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).grid(row=1, column=0, sticky='w')
-        self.entry_id = tk.Entry(panel, width=1, font=("Arial", 14), bg=GUI_BG, fg=GUI_INK,
-                                insertbackground=GUI_INK, relief='flat', bd=3,
-                                highlightthickness=1, highlightbackground=GUI_BORDER, highlightcolor=GUI_TEAL)
-        self.entry_id.grid(row=2, column=0, sticky='ew', pady=(0, 4))
-        self.entry_id.bind("<Button-1>", lambda e: self._set_active(self.entry_id))
-        self.entry_id.bind("<FocusIn>",  lambda e: self._set_active(self.entry_id))
+        cards = tk.Frame(panel, bg=GUI_PANEL)
+        cards.grid(row=3, column=0, sticky='nsew', pady=4)
+        cards.columnconfigure(0, weight=1)
+        self.registration_cards = []
+        for row in range(3):
+            cards.rowconfigure(row, weight=1, uniform='cards')
+            card = tk.Button(cards, text='', font=("Arial", 12, "bold"),
+                             bg='#202020', fg=GUI_INK, relief='flat', anchor='w',
+                             padx=10, justify='left', width=1, height=2)
+            card.grid(row=row, column=0, sticky='nsew', pady=2)
+            self.registration_cards.append(card)
 
-        # FULL NAME
-        tk.Label(panel, text="Name", font=("Arial", 10), bg=GUI_PANEL, fg=GUI_MUTED).grid(row=3, column=0, sticky='w')
-        self.entry_name = tk.Entry(panel, width=1, font=("Arial", 14), bg=GUI_BG, fg=GUI_INK,
-                                  insertbackground=GUI_INK, relief='flat', bd=3,
-                                  highlightthickness=1, highlightbackground=GUI_BORDER, highlightcolor=GUI_TEAL)
-        self.entry_name.grid(row=4, column=0, sticky='ew', pady=(0, 3))
-        self.entry_name.bind("<Button-1>", lambda e: self._set_active(self.entry_name))
-        self.entry_name.bind("<FocusIn>",  lambda e: self._set_active(self.entry_name))
-
-        # ON-SCREEN KEYBOARD (touchscreen kiosk - no physical keyboard)
-        self.build_keyboard(panel)
-
-        # SAVE + CANCEL side by side (saves vertical space)
+        pages = tk.Frame(panel, bg=GUI_PANEL)
+        pages.grid(row=4, column=0, sticky='ew')
+        self.btn_registration_previous = tk.Button(pages, text="Previous", height=2,
+                 command=lambda: self.change_registration_page(-1), bg='#303030', fg=GUI_INK, relief='flat')
+        self.btn_registration_previous.pack(side='left')
+        self.lbl_registration_page = tk.Label(pages, bg=GUI_PANEL, fg=GUI_INK)
+        self.lbl_registration_page.pack(side='left', expand=True)
+        self.btn_registration_next = tk.Button(pages, text="Next", height=2,
+                 command=lambda: self.change_registration_page(1), bg='#303030', fg=GUI_INK, relief='flat')
+        self.btn_registration_next.pack(side='right')
+        self.lbl_registration_selected = tk.Label(panel, text="Select an employee card",
+                 font=("Arial", 11), bg=GUI_PANEL, fg=GUI_WARN, anchor='w', wraplength=440, height=2)
+        self.lbl_registration_selected.grid(row=5, column=0, sticky='ew', pady=3)
         btn_row = tk.Frame(panel, bg=GUI_PANEL)
         btn_row.grid(row=6, column=0, sticky='ew', pady=(3, 2))
-        self.btn_capture = tk.Button(
-            btn_row, text="Look at camera",
-            font=("Arial", 12, "bold"), bg=GUI_BG, fg=GUI_INK, disabledforeground=GUI_INK,
-            activebackground='#952c3a', activeforeground='white', relief='flat', bd=0,
-            highlightthickness=1, highlightbackground=GUI_BORDER, highlightcolor=GUI_BORDER,
-            state="disabled", height=2, command=self.save_face_data
-        )
+        self.btn_capture = tk.Button(btn_row, text="Select employee", font=("Arial", 12, "bold"),
+                 bg=GUI_BG, fg=GUI_INK, disabledforeground=GUI_MUTED, relief='flat',
+                 state="disabled", height=2, command=self.save_face_data)
         self.btn_capture.pack(side="left", fill="x", expand=True, padx=(0, 4))
         tk.Button(btn_row, text="Cancel", font=("Arial", 12, "bold"),
-                  bg='#781b28', fg=GUI_INK, height=2, width=8,
-                  activebackground='#952c3a', activeforeground=GUI_INK, relief='flat', bd=0,
-                  highlightthickness=1, highlightbackground=GUI_BORDER, highlightcolor=GUI_BORDER,
+                  bg='#781b28', fg=GUI_INK, height=2, width=8, relief='flat',
                   command=lambda: self.show_frame("MENU")).pack(side="right", fill="y")
 
-    # ================= ON-SCREEN KEYBOARD =================
-    def build_keyboard(self, parent):
-        self.keyboard = TouchKeyboard(parent, self._kb_insert, self._kb_backspace, self._kb_clear, GUI_PANEL)
-        self.keyboard.grid(row=5, column=0, sticky='nsew', pady=2)
+    def registration_employees(self):
+        workers = self.transport.workers() if self.transport else {}
+        with self.database_lock:
+            enrolled = set(self.known_ids)
+        rows = [(uid, str(worker.get('name') or uid), uid in enrolled)
+                for uid, worker in workers.items()
+                if worker.get('active') and bool(uid in enrolled) == self.registration_registered]
+        return sorted(rows, key=lambda row: (row[1].casefold(), row[0]))
 
-    def _set_active(self, entry):
-        self.active_entry = entry
-        entry.focus_set()
+    def refresh_registration(self):
+        # Only reads in-memory snapshots; HTTP remains in ReliableTransport's worker.
+        if self.mode != 'REGISTER':
+            return
+        rows = self.registration_employees()
+        online = getattr(self, 'network_state', 'Connecting') == 'Online'
+        self.lbl_registration_sync.config(text=('Employees sync automatically' if online
+            else 'Offline / connecting - using last synced employees'))
+        valid = {row[0] for row in rows}
+        if self.registration_selected not in valid:
+            self.registration_selected = None
+        pages = max(1, (len(rows) + 2) // 3)
+        self.registration_page = max(0, min(self.registration_page, pages - 1))
+        selected = next((row for row in rows if row[0] == self.registration_selected), None)
+        self.lbl_registration_selected.config(text=(f"Selected: {selected[1]} ({selected[0]})"
+                                                    if selected else 'Select an employee card'))
+        signature = (tuple(rows), self.registration_page, self.registration_selected)
+        if signature != self.registration_signature:
+            self.registration_signature = signature
+            visible = rows[self.registration_page * 3:self.registration_page * 3 + 3]
+            for index, card in enumerate(self.registration_cards):
+                if index < len(visible):
+                    uid, name, enrolled = visible[index]
+                    status = 'Registered - tap to recapture' if enrolled else 'Ready to capture'
+                    card.config(text=f"{uid}  |  {name}\n{status}", state='normal',
+                                bg='#345c45' if uid == self.registration_selected else '#202020',
+                                command=lambda employee_id=uid: self.select_registration_employee(employee_id))
+                else:
+                    card.config(text=('No registered employees' if self.registration_registered
+                                      else 'No employees waiting for capture') if index == 0 and not rows else '',
+                                state='disabled', bg='#202020', command=lambda: None)
+            self.lbl_registration_count.config(text=f"{len(rows)} employees")
+            self.lbl_registration_page.config(text=f"{self.registration_page + 1} / {pages}")
+            self.btn_registration_previous.config(state='normal' if self.registration_page else 'disabled')
+            self.btn_registration_next.config(state='normal' if self.registration_page + 1 < pages else 'disabled')
+        self.update_registration_capture()
 
-    def _active(self):
-        e = getattr(self, "active_entry", None)
-        return e if e is not None else self.entry_id
+    def select_registration_employee(self, uid):
+        if uid not in {row[0] for row in self.registration_employees()}:
+            self.refresh_registration()
+            return
+        self.registration_selected = uid
+        self.reg_face_detected = False
+        self.reg_face_embedding = None
+        self.reg_embedding_time = 0
+        self.registration_selected_at = time.monotonic()
+        self.refresh_registration()
 
-    def _kb_normalize(self, e):
-        """Title-case the field (matches old auto_capitalize) and keep cursor at end."""
-        text = e.get()
-        titled = text.title()
-        if text != titled:
-            e.delete(0, tk.END)
-            e.insert(0, titled)
-        e.icursor(tk.END)
+    def toggle_registration_filter(self):
+        self.registration_registered = not self.registration_registered
+        self.registration_page = 0
+        self.registration_selected = None
+        self.btn_registration_filter.config(text='Show pending' if self.registration_registered else 'Show registered')
+        self.refresh_registration()
 
-    def _kb_insert(self, ch):
-        e = self._active()
-        e.insert(tk.INSERT, ch.lower() if ch.isalpha() else ch)
-        self._kb_normalize(e)
+    def change_registration_page(self, delta):
+        self.registration_page += delta
+        self.refresh_registration()
 
-    def _kb_backspace(self):
-        e = self._active()
-        cur = e.index(tk.INSERT)
-        if cur > 0:
-            e.delete(cur - 1, cur)
-
-    def _kb_clear(self):
-        self._active().delete(0, tk.END)
+    def update_registration_capture(self):
+        selected = self.registration_selected is not None
+        fresh = (self.reg_face_detected and self.reg_face_embedding is not None
+                 and time.monotonic() - self.reg_embedding_time < 1
+                 and getattr(self, 'reg_capture_started', self.reg_embedding_time) > getattr(self, 'registration_selected_at', 0))
+        self.btn_capture.config(state='normal' if selected and fresh else 'disabled',
+                                text=('Save face' if fresh else 'Look at camera') if selected else 'Select employee',
+                                bg='#781b28' if selected and fresh else GUI_BG)
 
     def setup_attendance(self):
         self.frame_attendance = tk.Frame(self.root, bg="black")
@@ -625,7 +677,7 @@ class SmartAttendanceSystem:
                             if self.mode == job_mode and time.monotonic() - job_time < 3:
                                 faces = [SimpleNamespace(**f) for f in result]
                                 if job_mode == 'REGISTER':
-                                    self.process_register(faces)
+                                    self.process_register(faces, job_time)
                                 elif job_mode == 'ATTENDANCE':
                                     self.process_attendance(faces)
                     except queue.Empty:
@@ -698,24 +750,23 @@ class SmartAttendanceSystem:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, tcolor, 1)
 
     # ================= REGISTER LOGIC (runs in inference thread) =================
-    def process_register(self, faces):
+    def process_register(self, faces, captured_at=None):
         """analysis_frame = BGR (for InsightFace). Boxes are in display coords."""
 
-        if len(faces) == 1:
+        if len(faces) == 1 and (captured_at is None or captured_at > getattr(self, 'registration_selected_at', 0)):
+            self.reg_capture_started = captured_at if captured_at is not None else time.monotonic()
             self.reg_face_detected = True
             self.reg_face_embedding = faces[0].embedding.copy()
             self.reg_embedding_time = time.monotonic()
             box = faces[0].bbox.astype(int)
             self.reg_overlays = [dict(box=box, color=CV_GREEN,
                                       label="FACE DETECTED", tcolor=(255, 255, 255))]
-            self.ui(lambda: self.btn_capture.config(bg='#781b28', fg="white",
-                                                    state="normal", text="Save face"))
+            self.ui(self.update_registration_capture)
         else:
             self.reg_face_detected = False
             self.reg_face_embedding = None
             self.reg_overlays = []
-            self.ui(lambda: self.btn_capture.config(bg=GUI_BG, fg=GUI_INK,
-                                                    state="disabled", text="Look at camera"))
+            self.ui(self.update_registration_capture)
 
     # ================= ATTENDANCE LOGIC (runs in inference thread) =================
     def process_attendance(self, faces):
@@ -876,11 +927,15 @@ class SmartAttendanceSystem:
             self.root.focus_force()
         elif mode == "REGISTER":
             self.reg_face_embedding = None
-            self.entry_id.delete(0, tk.END)
-            self.entry_name.delete(0, tk.END)
+            self.reg_face_detected = False
+            self.registration_selected = None
+            self.registration_page = 0
+            self.registration_registered = False
+            self.btn_registration_filter.config(text='Show registered')
+            self.reload_database()
             self.frame_register.pack(fill="both", expand=True)
             self.root.focus_force()
-            self._set_active(self.entry_id)   # ID field ready for on-screen keyboard
+            self.refresh_registration()
         elif mode == "ATTENDANCE":
             self.reload_database()
             self.frame_attendance.pack(fill="both", expand=True)
@@ -904,24 +959,26 @@ class SmartAttendanceSystem:
         print(f'[DB] Loaded {len(ids)} face registrations')
 
     def save_face_data(self):
-        uid  = self.entry_id.get().strip()
-        name = self.entry_name.get().strip()
-
-        if not re.fullmatch(r"[A-Za-z0-9-]{1,40}", uid):
-            messagebox.showwarning("MISSING INFO", "Use a valid employee ID (letters, numbers or hyphens).", parent=self.root)
-            return
-        if not name:
-            messagebox.showwarning("MISSING INFO", "Please enter a Name!", parent=self.root)
-            return
-
+        uid = self.registration_selected or ''
         worker = self.transport.workers().get(uid) if self.transport else None
+        name = str(worker.get('name') or uid) if worker else ''
+
+        if not uid:
+            messagebox.showwarning('SELECT EMPLOYEE', 'Select an employee card first.', parent=self.root)
+            return
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,40}", uid):
+            messagebox.showwarning('INVALID EMPLOYEE ID', 'Correct this employee ID in the React system first.', parent=self.root)
+            return
+
         if not worker or not worker.get('active'):
             messagebox.showwarning('EMPLOYEE NOT FOUND', 'Add this employee in the React app first, then wait for the kiosk to sync.', parent=self.root)
             return
-        if not self.reg_face_detected or self.reg_face_embedding is None or time.monotonic() - self.reg_embedding_time > 1:
+        captured_at = self.reg_embedding_time
+        embedding = self.reg_face_embedding
+        if not self.reg_face_detected or embedding is None or (time.monotonic() - captured_at > 1 or getattr(self, 'reg_capture_started', captured_at) <= getattr(self, 'registration_selected_at', 0)):
             messagebox.showwarning('LOOK AT CAMERA', 'A fresh face capture is required.', parent=self.root)
             return
-        name = re.sub(r'[^A-Za-z0-9 -]', '', worker['name'])
+        name = re.sub(r'[^A-Za-z0-9 -]', '', name) or uid
         existing = [f for f in os.listdir(DB_PATH) if f.startswith(uid + "_")]
         if existing:
             if not messagebox.askyesno(
@@ -931,20 +988,28 @@ class SmartAttendanceSystem:
             ):
                 return
 
-        if self.reg_face_embedding is not None:
-            embedding = self.reg_face_embedding.copy()
+        if embedding is not None:
+            embedding = embedding.copy()
             target = Path(DB_PATH) / f'{uid}_{name}.npy'
             temporary = target.with_suffix('.tmp')
-            with open(temporary, 'wb') as file:
-                np.save(file, embedding)
-                file.flush()
-                os.fsync(file.fileno())
-            os.replace(temporary, target)
-            for old_file in existing:
-                if old_file != target.name:
-                    os.remove(os.path.join(DB_PATH, old_file))
+            try:
+                with open(temporary, 'wb') as file:
+                    np.save(file, embedding)
+                    file.flush()
+                    os.fsync(file.fileno())
+                os.replace(temporary, target)
+                for old_file in existing:
+                    if old_file != target.name:
+                        os.remove(os.path.join(DB_PATH, old_file))
+            except OSError as exc:
+                messagebox.showerror('SAVE FAILED', f'Face was not fully saved. Please retry.\n{exc}', parent=self.root)
+                return
             messagebox.showinfo("SAVED", f"User '{name}' registered successfully!", parent=self.root)
-            self.show_frame("MENU")
+            self.reload_database()
+            self.registration_selected = None
+            self.reg_face_embedding = None
+            self.reg_face_detected = False
+            self.refresh_registration()
         else:
             messagebox.showwarning("NO FACE", "No face detected. Please look at the camera.", parent=self.root)
 

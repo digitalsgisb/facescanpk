@@ -1,6 +1,6 @@
 # Raspberry Pi · Python kiosk
 
-This folder goes on the **Raspberry Pi**, not the AI PC. It includes `face.py`, camera/inference workers, the complete 800×480 registration keyboard, durable offline delivery and connection setup.
+This folder goes on the **Raspberry Pi**, not the AI PC. It includes `face.py`, camera/inference workers, touchscreen employee-card registration, durable offline delivery and connection setup.
 
 ## Step-by-step: connect your existing Pi
 
@@ -35,8 +35,16 @@ For the Ubuntu Docker installation use **port 3800** in the address, for example
     ```
 
     Leave this terminal/process running. If you already have a service, restart that service using its existing Python environment and the updated attendance folder instead of starting a second copy.
-11. **Verify face enrollment.** Existing enrollments remain in `database/`. For a new employee, add their profile on the PC first, allow the kiosk employee list to sync, then use registration on the Pi. Enter the matching employee ID, look at the camera and save when capture is available. A profile photograph in React is not a face enrollment.
+11. **Verify face enrollment.** Existing enrollments remain in `database/`. For a new employee, add their profile on the PC first, allow the kiosk employee list to sync, then use registration on the Pi. Tap Register face, select the employee card, look at the camera and tap Save face when capture is available. A profile photograph in React is not a face enrollment.
 12. **Check one supervised scan.** Verify that Python receives a confirmed result and the PC board updates for the same employee. Do not deliberately clock in/out real employees merely to test; use an approved test employee. Disable the old Node-RED attendance scan flow after the replacement has been validated, to avoid recording through both systems.
+
+## Register faces with employee cards
+
+Add or edit employees on the React dashboard first. The Pi uses its existing background employee sync (normally about every 20 seconds while connected), so registration does not make HTTP requests on the UI thread.
+
+Open **Register face** to see active employees without a valid local face enrollment. Tap an employee card, look at the camera alone, then tap **Save face**. ID and name come from the synced employee profile; there is no typing. After saving, the employee leaves the pending list. Use **Previous / Next** for more employees, or **Show registered** to select someone for recapture; replacing an existing enrollment requires confirmation.
+
+While offline, the page uses the last synced employee list and labels it accordingly. New employees and changes appear after connection recovers. Profile photos in React are not face enrollments: the Pi still captures the recognition data from its camera. Inactive employees are excluded, and selection is cleared if an employee disappears from the eligible list. Existing invalid face files remain pending until a valid enrollment is saved.
 
 ## Step-by-step: update the Pi
 
@@ -112,7 +120,7 @@ Refresh the HDMI browser to load the updated AI PC dashboard. Pi updates do not 
 
 1. Keep **DSI-1** at **800×480**, position **0,0**, scale **1**. This is the Python touchscreen.
 2. Keep **HDMI-A-2** at **1366×768**, position **800,0**, scale **1**. This is the attendance board screen. These match the supplied `wlr-randr` output; no resolution change is required.
-3. Start Python as above. It maps an 800×480 window at (0,0), then requests fullscreen. Confirm its registration keyboard is fully visible on DSI. Monitor placement ultimately depends on the Pi's window manager.
+3. Start Python as above. It maps an 800×480 window at (0,0), then requests fullscreen. Confirm its employee cards and capture controls are fully visible on DSI. Monitor placement ultimately depends on the Pi's window manager.
 4. Open the Pi's browser and enter the **PC's LAN address**, for example `http://192.168.1.100:8765`. Do not use `127.0.0.1` on the Pi: that points back to the Pi itself.
 5. Move the browser window onto HDMI **before** entering fullscreen. Sign into the attendance app, open Live board, then select TV fullscreen. If browser chrome still occupies space, use the browser's own fullscreen control while that window is on HDMI.
 6. Check the total employee count and use the TV page controls to see everyone. Large photos rotate across grouped pages; Compact overview shows the workforce together. The count follows your actual active employees; the public code-only installation starts empty. Python remains on DSI while the browser board occupies HDMI.
@@ -146,7 +154,7 @@ The default kiosk uses **800x480 fullscreen** on the touchscreen. Launch from a 
 
 The welcome menu uses pure black panels, centred branding and maroon Start scanning and Register face touch targets. Close exits Python and releases its camera workers; Stop / Menu returns to this welcome menu without exiting. The screens use short labels, smaller headings and generous spacing; routine status shows just connectivity, with pending scans and camera/recognition problems shown when needed. The old attendance workspace subtitle is removed from the kiosk menu.
 
-Welcome, scanning and registration use pure black backgrounds with white text. Main action buttons are maroon; keyboard keys and entry fields remain black with thin white outlines. Confirmed attendance uses green, review/pending notices use amber, and errors use pale rose for contrast. The camera preview remains unobstructed and STOP plus the company logo remain in the bottom scanning footer.
+Welcome, scanning and registration use pure black backgrounds with white text. Main action buttons are maroon; employee cards show synced IDs and names. Confirmed attendance uses green, review/pending notices use amber, and errors use pale rose for contrast. The camera preview remains unobstructed and STOP plus the company logo remain in the bottom scanning footer.
 
 ```bash
 sudo systemctl stop attendance-kiosk
@@ -154,7 +162,7 @@ cd /home/wblsugihara
 KIOSK_DEBUG_TOUCH=1 python3 -u face.py
 ```
 
-Use physical touch to test STOP, registration fields, keyboard and Cancel. Fullscreen placement still depends on Wayfire and needs physical verification. If it returns to the wrong display, `KIOSK_FULLSCREEN=0 python3 face.py` restores the working 780x400 managed window. The older automatic two-screen instructions below are optional and are not part of the current manual touchscreen setup.
+Use physical touch to test STOP, employee cards, page navigation, Save face and Cancel. Fullscreen placement still depends on Wayfire and needs physical verification. If it returns to the wrong display, `KIOSK_FULLSCREEN=0 python3 face.py` restores the working 780x400 managed window. The older automatic two-screen instructions below are optional and are not part of the current manual touchscreen setup.
 
 ### Pin the kiosk to DSI-1 under Wayfire
 
