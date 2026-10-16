@@ -22,6 +22,7 @@ from kiosk_transport import ReliableTransport
 from kiosk_config import load_config
 from kiosk_keyboard import TouchKeyboard
 from kiosk_touch import enable_touch_buttons, trace_input
+from kiosk_instance import kiosk_instance, KioskAlreadyRunning
 from kiosk_vision import camera_worker, inference_worker, put_latest
 from datetime import datetime
 
@@ -948,8 +949,7 @@ class SmartAttendanceSystem:
             messagebox.showwarning("NO FACE", "No face detected. Please look at the camera.", parent=self.root)
 
 
-if __name__ == "__main__":
-    mp.freeze_support()
+def run_kiosk():
     def request_exit(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, request_exit)
@@ -970,3 +970,12 @@ if __name__ == "__main__":
             if child.is_alive():
                 child.kill()
                 child.join(timeout=1)
+
+
+if __name__ == "__main__":
+    mp.freeze_support()
+    try:
+        with kiosk_instance():
+            run_kiosk()
+    except KioskAlreadyRunning as exc:
+        print(f'[STARTUP] {exc}', flush=True)

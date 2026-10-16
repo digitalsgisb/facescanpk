@@ -186,6 +186,10 @@ For a manual diagnostic run, keep the service stopped and run `KIOSK_DEBUG_TOUCH
 
 ### Camera says Device or resource busy
 
+Updated kiosks use a shared per-user OS lock before creating Tk/camera workers. On the Pi it is `/tmp/digital-attendance-kiosk-UID.lock`, shared across working directories and code copies. A second updated kiosk exits with `[STARTUP] Attendance kiosk is already running...` without opening another camera. Do not delete the lock file to bypass it: the OS releases the lock when its owner exits, and leftover PID text does not block startup. This does not protect old unpatched copies, another desktop user, unrelated camera applications or orphan workers left by SIGKILL.
+
+For manual launch, stop/disable any restart timer and fullscreen startup service as well as stopping the main service. A disabled service can still be started by an enabled timer. Inspect the actual unit definitions before removing files; preserve backups and keep the camera enrollments, kiosk configuration and outbox intact. Known startup jobs observed on this Pi include `attendance-kiosk-restart.timer`, `attendance-kiosk-restart.service` and `kiosk-force-fullscreen.service`.
+
 Stop the service and close all manual kiosk runs before starting one instance. `sudo fuser -v /dev/video* /dev/media*` identifies current holders. Inspect a Python PID with `ps -p PID -o pid,ppid,args`; stop only the identified old attendance worker with `kill -TERM PID`, using `kill -KILL PID` only if that same worker remains stuck. Do not kill all Python processes, PipeWire or WirePlumber indiscriminately.
 
 Ctrl+C, the window close button and SIGTERM now run worker cleanup. The camera gets a stop request and an opportunity to close before forced termination; stuck native workers still have a bounded termination fallback. Camera acquisition failures are reported without repeated constructor tracebacks and retry every 10 seconds. These changes cannot release a camera already held by another running process, and SIGKILL bypasses Python cleanup.
