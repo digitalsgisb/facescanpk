@@ -160,3 +160,5 @@ python tools/package.py
 ```
 
 Keyboard checks require Tk and a desktop display. Camera/inference recovery and monitor placement still need testing on the actual Raspberry Pi. Package generation requires `ai-pc/dist/index.html`; run the React build first after changing its source. Never add employee photos, biometric embeddings, attendance databases, tokens or the old Node-RED export to this public repository.
+
+Compact view has no footer strip: its employee count remains in the header, and the board uses the freed height for automatic fitting. Large photos retains its page navigation.

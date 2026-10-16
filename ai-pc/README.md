@@ -40,7 +40,7 @@ Open **Control centre** from the sidebar. It brings team hours, overtime, schedu
 
 Schedule priority is: employee date override → team date override → A/B rotation → team default → individual fallback. Team OT affects rotation/default hours; explicit date overrides retain their chosen schedule. Existing attendance sessions keep their saved planned times.
 
-The workspace stays white with black animated headers and flat green/red attendance cards. **Compact overview** automatically scales the full workforce into its screen area without scrolling. **Large photos** keeps readable native-size cards on rotating pages.
+The workspace stays white with black headers, sidebar, login and monochrome branding, including the favicon. The sidebar has animated translucent ribbons, an outlined orbit and a glowing selected item. Attendance cards retain their flat green/red colours. **Compact overview** automatically scales the full workforce into its screen area without scrolling. **Large photos** keeps readable native-size cards on rotating pages.
 
 ## Stay signed in
 
@@ -164,3 +164,5 @@ To upload AI PC source changes, follow the repository's [Git push commands](../R
 ## Public repository exclusions
 
 Live database, employee names/IDs/photos, face embeddings, private tokens, certificates, original Node-RED credentials and local preview screenshots are not included. The company logo and generic UI assets are included. `data/employees.json` and `runtime/` are intentionally ignored by Git.
+
+Compact view has no footer strip: its employee count remains in the header, and the board uses the freed height for automatic fitting. Large photos retains its page navigation.
