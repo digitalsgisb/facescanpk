@@ -40,7 +40,7 @@ Open **Control centre** from the sidebar. It brings team hours, overtime, schedu
 
 Schedule priority is: employee date override → team date override → A/B rotation → team default → individual fallback. Team OT affects rotation/default hours; explicit date overrides retain their chosen schedule. Existing attendance sessions keep their saved planned times.
 
-The workspace stays white with black headers, sidebar, login and monochrome branding, including the favicon. The sidebar has animated translucent ribbons, an outlined orbit and a glowing selected item. Attendance cards retain their flat green/red colours. **Compact overview** automatically scales the full workforce into its screen area without scrolling. **Large photos** keeps readable native-size cards on rotating pages.
+The workspace stays white with black headers, sidebar, login and favicon. The company logo keeps its original colours. The sidebar has animated translucent ribbons, an outlined orbit and a glowing selected item. Attendance cards retain their flat green/red colours. **Compact overview** automatically scales the full workforce into its screen area without scrolling. **Large photos** keeps readable native-size cards on rotating pages.
 
 ## Stay signed in
 
