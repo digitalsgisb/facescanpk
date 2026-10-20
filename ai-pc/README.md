@@ -205,3 +205,11 @@ To upload AI PC source changes, follow the repository's [Git push commands](../R
 Live database, employee names/IDs/photos, face embeddings, private tokens, certificates, original Node-RED credentials and local preview screenshots are not included. The company logo and generic UI assets are included. `data/employees.json` and `runtime/` are intentionally ignored by Git.
 
 Compact view has no footer strip: its employee count remains in the header, and the board uses the freed height for automatic fitting. Large photos retains its page navigation.
+
+## Mobile employee administration update
+
+See [employee administration](EMPLOYEE-ADMIN.md) for staff roles, consent history, phone photos, metadata sync confirmation, retention, deployment, tests and rollback.
+
+## Testing reset and multi-plant rollout
+
+See [the plant rollout guide](PLANT-ROLLOUT.md) for clocking everyone out safely, importing the HR workbook with exact positions, separate Port Klang/Sendayan accounts, the developer account, and backed-up code/data transfer.

@@ -42,6 +42,42 @@ class TransportTests(unittest.TestCase):
         return ReliableTransport(base or f'http://127.0.0.1:{self.server.server_port}','test-token',Path(self.temp.name)/'kiosk',
             lambda uid,r:self.results.put((uid,r)),lambda *args:None)
 
+    def test_metadata_acknowledgement_follows_durable_cache_and_contains_no_photos(self):
+        original=ReliableTransport.request
+        acknowledged=threading.Event()
+        failures=[]
+        def request(transport,path,payload=None):
+            if path=='/api/heartbeat':
+                try:
+                    saved=json.loads((transport.directory/'employees-cache.json').read_text(encoding='utf-8'))
+                    self.assertEqual(payload['metadata_version'],saved['metadata_version'])
+                    self.assertNotIn('photo_url',saved['employees'][0])
+                    self.assertNotIn('consents',saved['employees'][0])
+                    self.assertEqual(saved['employees'][0]['id'],'123')
+                except Exception as exc:
+                    failures.append(exc)
+                acknowledged.set()
+            return original(transport,path,payload)
+        with patch.object(ReliableTransport,'request',request):
+            self.transport=self.create_transport()
+            self.assertTrue(acknowledged.wait(8))
+        self.assertEqual(failures,[])
+
+    def test_failed_cache_write_never_acknowledges_new_metadata(self):
+        original=ReliableTransport.request
+        heartbeat=threading.Event()
+        def request(transport,path,payload=None):
+            if path=='/api/heartbeat':
+                heartbeat.set()
+            return original(transport,path,payload)
+        with patch.object(ReliableTransport,'request',request), patch('kiosk_transport.os.replace',side_effect=OSError('simulated disk failure')):
+            self.transport=self.create_transport()
+            self.assertFalse(heartbeat.wait(1.5))
+            self.transport.close()
+            self.transport.thread.join(timeout=5)
+        with self.server.store.connect() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM metadata_receipts').fetchone()[0],0)
+
     def test_connection_setup_verifies_kiosk_scope_without_attendance(self):
         url=f'http://127.0.0.1:{self.server.server_port}'
         self.assertEqual(check_connection(url,'test-token'),1)

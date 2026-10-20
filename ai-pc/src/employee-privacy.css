@@ -1,0 +1,15 @@
+.employee-privacy {border-top:1px solid #ddd;margin-top:20px;padding:16px 0;line-height:1.5}
+.employee-privacy small {display:block;margin-top:6px;color:#555}
+.employee-privacy label {display:flex;flex-direction:column;gap:6px;min-width:0}
+.employee-privacy .checkbox-label {flex-direction:row;align-items:center;margin:16px 0}
+.employee-privacy input,.employee-privacy select {min-height:44px;max-width:100%;font-size:16px}
+@media(max-width:650px) {
+  .modal .form-grid {grid-template-columns:minmax(0,1fr)}
+  .modal .span-two {grid-column:1}
+  .modal input,.modal select,.modal textarea {font-size:16px;min-height:44px}
+  .modal .employee-profile {align-items:flex-start;flex-wrap:wrap}
+  .modal .photo-choices {flex-wrap:wrap}
+  .modal .upload-button {min-height:44px}
+  .modal .modal-footer {flex-wrap:wrap;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+  .modal .modal-footer button {min-height:44px}
+}

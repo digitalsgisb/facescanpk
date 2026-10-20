@@ -20,7 +20,7 @@ export function EmployeeDetails({employee, onClose}) {
   useEffect(() => setBroken(false), [employee?.photo_url]);
   if (!employee) return null;
   const details = [
-    ['Employee ID', employee.id], ['Department', employee.department || 'Unassigned'],
+    ['Employee ID', employee.id], ['Plant / location', employee.base || 'Unassigned'], ['Company', employee.company || 'Unassigned'], ['Department', employee.department || 'Unassigned'],
     ...(productionSection(employee)?[['Production section',productionSection(employee)]]:[]),
     ...(employee.department?.trim().toUpperCase()==='OFFICE'?[['Office department',employee.office_department||'Unassigned']]:[]),
     ['Production line', employee.line || 'Unassigned'], ['Position', employee.position || 'Unassigned'],

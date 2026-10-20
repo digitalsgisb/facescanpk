@@ -15,6 +15,8 @@ import time
 import uuid
 import zipfile
 import ssl
+import employee_admin
+import testing_operations
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone, date
 from http.cookies import SimpleCookie
@@ -25,7 +27,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 BASE = Path(__file__).resolve().parent
 KL = timezone(timedelta(hours=8), 'Asia/Kuala_Lumpur')
 SESSION_COOKIE_AGE = 400 * 24 * 3600  # Browser persistence, renewed on authenticated requests.
-FIELDS = ('id', 'name', 'nickname', 'department', 'position', 'line', 'team', 'photo_url', 'schedule_id', 'production_section', 'office_department', 'checksheet_group', 'active')
+FIELDS = ('id', 'name', 'nickname', 'department', 'position', 'line', 'team', 'photo_url', 'schedule_id', 'production_section', 'office_department', 'checksheet_group', 'company', 'base', 'employment_department', 'job_type', 'active')
 TEMPLATES = [
     ('normal', 'Normal working hours', '07:45', '17:40', 0),
     ('day', 'Day shift', '08:00', '16:15', 0),
@@ -164,8 +166,10 @@ class Store:
             CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS attendance_access (token_hash TEXT PRIMARY KEY, expires REAL NOT NULL);
             ''')
+            employee_admin.migrate(db)
+            testing_operations.migrate(db)
             columns={r['name'] for r in db.execute('PRAGMA table_info(employees)')}
-            for column in ('production_section','office_department','checksheet_group'):
+            for column in ('production_section','office_department','checksheet_group','company','base','employment_department','job_type'):
                 if column not in columns:
                     db.execute(f"ALTER TABLE employees ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
             if 'scope' not in {r['name'] for r in db.execute('PRAGMA table_info(assignments)')}:
@@ -265,7 +269,7 @@ class Store:
             cutoff=(datetime.now(KL)-timedelta(hours=self.settings(db)['max_open_hours'])).isoformat()
             items=[dict(row) for row in db.execute('''SELECT s.*,COALESCE(p.name,e.name) AS name,
                 COALESCE(p.nickname,e.nickname) AS nickname,COALESCE(p.department,e.department) AS department,
-                COALESCE(p.line,e.line) AS line,COALESCE(p.team,e.team) AS team
+                COALESCE(p.line,e.line) AS line,COALESCE(p.team,e.team) AS team,e.base AS base
                 FROM sessions s JOIN employees e ON e.id=s.employee_id
                 LEFT JOIN employee_snapshots p ON p.session_id=s.id WHERE '''+ATTENTION_SESSION+
                 ' ORDER BY s.time_in ASC,s.id LIMIT ? OFFSET ?',(cutoff,limit,offset))]
@@ -330,11 +334,15 @@ class Store:
                 raise Problem('Employee field is invalid or too long.')
         if e.get('active', True) not in (True, False, 0, 1):
             raise Problem('Active must be true or false.')
+        if e.get('base') and not re.fullmatch(r'[A-Z0-9][A-Z0-9 &_.-]{0,79}',e['base']):
+            raise Problem('Use an uppercase plant location of 1–80 characters.')
         if e.get('schedule_id') and not db.execute('SELECT 1 FROM schedules WHERE id=?', (e['schedule_id'],)).fetchone():
             raise Problem('Schedule does not exist.')
         photo = e.get('photo_url', '')
         if photo and not (photo.startswith('https://') or re.fullmatch(r'/uploads/[a-f0-9]+\.jpg', photo)):
             raise Problem('Photo must be an HTTPS URL or an app upload.')
+        if photo and db.execute('SELECT 1 FROM profile_photos WHERE url=? AND deleted_at IS NOT NULL',(photo,)).fetchone():
+            raise Problem('This profile photo was deleted. Choose a new photo.')
 
     def employees(self, db):
         today = datetime.now(KL).date()
@@ -491,7 +499,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise Problem('Invalid request length.')
             if length > 7_000_000:
                 raise Problem('Upload too large.', 413)
-            return json.loads(self.rfile.read(length) or b'{}')
+            data = json.loads(self.rfile.read(length) or b'{}')
+            if not isinstance(data, dict):
+                raise Problem('Request must be a JSON object.')
+            return data
         except (ValueError, json.JSONDecodeError):
             raise Problem('Invalid JSON request.')
 
@@ -510,14 +521,20 @@ class Handler(BaseHTTPRequestHandler):
         if token and db.execute('SELECT 1 FROM auth_sessions WHERE token_hash=? AND (expires=0 OR expires>?)', (digest(token),time.time())).fetchone():
             self.session_token = token
             return {'id':'admin','scope':'admin'}
+        staff = db.execute('SELECT s.username,s.role,s.base FROM staff_sessions t JOIN staff s ON s.username=t.username WHERE t.token_hash=? AND t.expires>? AND s.active=1', (digest(token),time.time())).fetchone() if token else None
+        if staff:
+            self.session_token = token
+            return {'id':staff['username'], 'scope':staff['role'],'base':staff['base']}
         raise Problem('Please sign in.', 401)
 
     def guard_origin(self):
         origin = self.headers.get('Origin')
         if origin:
             parsed = urlparse(origin)
-            host = self.headers.get('Host', '').split(':')[0]
-            if parsed.hostname != host or parsed.port not in (None, self.server.server_port, 5173):
+            host = self.headers.get('Host', '')
+            # Compare the browser-facing authority, including a published Docker
+            # port, rather than the internal server socket's port.
+            if parsed.scheme not in ('http','https') or parsed.netloc.lower() != host.lower() or parsed.username or parsed.password:
                 raise Problem('Request origin is not allowed.', 403)
 
     def do_GET(self):
@@ -549,6 +566,19 @@ class Handler(BaseHTTPRequestHandler):
             with self.store.connect() as db:
                 who = self.identity(db, allow_device=True)
                 scope = who['scope']
+                self.actor = who['id']
+                self.plant = who.get('base','')
+                if self.plant and scope == 'admin':
+                    allowed=(method=='GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/review','/api/clock-access')) or (method in ('POST','DELETE') and route in ('/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/apply')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
+                    if not allowed:
+                        raise Problem('This account manages its assigned plant only.',403)
+                if self.plant and route.startswith('/api/employees/'):
+                    eid=route.split('/')[3]
+                    self.check_plant(db,eid)
+                if scope == 'employee_admin':
+                    allowed = (method == 'GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules')) or (route == '/api/photos' and method == 'POST') or (re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?', route) and method in ('GET','POST','PUT','DELETE'))
+                    if not allowed:
+                        raise Problem('Employee administrator permission is required for this operation.',403)
                 if scope == 'kiosk' and route not in ('/api/scans','/api/heartbeat','/api/employees','/api/schedules'):
                     raise Problem('Kiosk access is limited to scanning and employee lookup.', 403)
                 if scope == 'integration' and (method != 'GET' or route not in ('/api/employees','/api/attendance')):
@@ -559,29 +589,41 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(self.state(db))
                 if route == '/api/employees' and method == 'GET':
                     employees = self.store.employees(db)
+                    if self.plant:
+                        employees=[e for e in employees if e.get('base')==self.plant]
                     if scope == 'kiosk':
-                        employees = [{'id':e['id'],'name':e['name'],'active':e['active'],'status':e['status'],
-                                      'effective_schedule':e['effective_schedule']} for e in employees]
+                        employees = [{**row,'status':e['status'],'effective_schedule':e['effective_schedule']}
+                                     for row,e in zip(employee_admin.metadata(employees),sorted(employees,key=lambda e:e['id']))]
+                    elif scope in ('admin','employee_admin'):
+                        employee_admin.decorate(db, employees)
                     return self.send({'employees':employees,'cooldown_seconds':self.store.settings(db)['cooldown_seconds'],
+                                      'metadata_version':employee_admin.version(employees),
                                       'connection_scope':scope})
                 if route == '/api/schedules' and method == 'GET':
                     return self.send({'schedules':[dict(r) for r in db.execute('SELECT * FROM schedules')]})
                 if route == '/api/scans' and method == 'POST':
                     if scope != 'kiosk':
                         raise Problem('Use a registered kiosk to submit scans.', 403)
-                    result = self.store.scan(self.body(), who['id'])
+                    data=self.body()
+                    self.check_plant(db,data.get('employee_id'))
+                    result = self.store.scan(data, who['id'])
                     return self.send(result)
                 if route == '/api/heartbeat' and method == 'POST':
                     if scope != 'kiosk':
                         raise Problem('Kiosk token required.',403)
                     data = self.body()
+                    metadata_version = data.get('metadata_version')
+                    if metadata_version is not None:
+                        if not isinstance(metadata_version,str) or not re.fullmatch(r'[a-f0-9]{64}',metadata_version):
+                            raise Problem('Invalid metadata acknowledgement.')
+                        db.execute('INSERT OR REPLACE INTO metadata_receipts VALUES(?,?,?)',(who['id'],metadata_version,now_iso()))
                     db.execute('UPDATE devices SET last_seen=?,health=? WHERE id=?', (now_iso(), json.dumps(data), who['id']))
                     db.commit()
                     self.store.emit()
                     return self.send({'ok':True})
                 if route == '/api/attendance' and method == 'GET':
                     return self.send({'sessions':self.sessions(db, query)})
-                if scope != 'admin':
+                if scope not in ('admin','employee_admin'):
                     raise Problem('Administrator access required.',403)
                 if route == '/api/attention' and method == 'GET':
                     category=query.get('category',['hours'])[0]
@@ -603,10 +645,23 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute('DELETE FROM attendance_access WHERE token_hash=?',(digest(self.session_token),))
                     db.commit()
                     return self.send({'ok':True})
-                if route in ('/api/clock','/api/clock/batch') and method == 'POST':
+                if route in ('/api/clock','/api/clock/batch','/api/clock/reset') and method == 'POST':
                     if not db.execute('SELECT 1 FROM attendance_access WHERE token_hash=? AND expires>?',
                                       (digest(self.session_token),time.time())).fetchone():
                         raise Problem('Enter the administrator password to unlock attendance controls.',403)
+                if route in ('/api/clock/reset','/api/employee-import/preview','/api/employee-import/apply') and method == 'POST':
+                    if scope != 'admin':
+                        raise Problem('Administrator access required.',403)
+                    data=self.body()
+                    db.execute('BEGIN IMMEDIATE')
+                    if route.endswith('/preview'):
+                        response,_=testing_operations.preview(self.store,db,data.get('payload'),FIELDS,Problem,self.plant)
+                    else:
+                        response=testing_operations.operation(self.store,db,'reset' if route.endswith('/reset') else 'employee-import',data,self.actor,FIELDS,Problem,datetime.now(KL).isoformat(),self.plant)
+                    db.commit()
+                    if not route.endswith('/preview'):
+                        self.store.emit()
+                    return self.send(response)
                 if route == '/api/clock/batch' and method == 'POST':
                     data = self.body()
                     ids, action, batch_id = data.get('employee_ids'), data.get('action'), data.get('batch_id','')
@@ -614,6 +669,8 @@ class Handler(BaseHTTPRequestHandler):
                         raise Problem('Choose clock in or out and between 1 and 200 employees.')
                     if not all(isinstance(eid,str) and eid for eid in ids) or len(set(ids)) != len(ids):
                         raise Problem('Employee IDs must be unique non-empty strings.')
+                    for eid in ids:
+                        self.check_plant(db,eid)
                     if not isinstance(batch_id,str) or not re.fullmatch(r'[A-Za-z0-9-]{8,80}', batch_id):
                         raise Problem('A stable batch_id is required for safe retries.')
                     results = []
@@ -629,6 +686,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'results':results})
                 if route == '/api/clock' and method == 'POST':
                     data = self.body()
+                    self.check_plant(db,data.get('employee_id'))
                     # Server time is authoritative. Reuse the committed time for an idempotent retry.
                     previous = db.execute('SELECT occurred_at FROM events WHERE id=?', (data.get('event_id', ''),)).fetchone()
                     data['timestamp'] = previous['occurred_at'] if previous else now_iso()
@@ -639,7 +697,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'events':[dict(r) for r in db.execute('''SELECT v.*,e.name,e.nickname FROM events v
                         JOIN employees e ON e.id=v.employee_id WHERE json_extract(v.result,'$.action')='REVIEW'
                         AND NOT EXISTS(SELECT 1 FROM audit a WHERE a.entity_id=v.id AND a.action='scan_reviewed')
-                        ORDER BY v.occurred_at DESC LIMIT 1000''')]})
+                        AND (?='' OR e.base=?) ORDER BY v.occurred_at DESC LIMIT 1000''',(self.plant,self.plant))]})
                 if route == '/api/backup' and method == 'GET':
                     backup = self.store.path.parent / ('backup-'+str(uuid.uuid4())+'.sqlite3')
                     try:
@@ -653,11 +711,23 @@ class Handler(BaseHTTPRequestHandler):
                     finally:
                         backup.unlink(missing_ok=True)
                 if route == '/api/photos' and method == 'POST':
-                    return self.photo(self.body())
+                    return self.photo(self.body(), db)
+                if route == '/api/staff' and method == 'GET':
+                    return self.send({'staff':[dict(r) for r in db.execute('SELECT username,role,active,base FROM staff')]})
+                if route == '/api/retention' and method == 'POST':
+                    days = self.body().get('unreferenced_photo_days',30)
+                    if type(days) is not int or not 1 <= days <= 3650:
+                        raise Problem('Photo retention must be between 1 and 3650 days.')
+                    db.execute('BEGIN IMMEDIATE')
+                    count = employee_admin.cleanup_photos(self.store,db,days,self.actor,now_iso())
+                    db.commit()
+                    employee_admin.erase_deleted_photos(self.store,db)
+                    return self.send({'deleted_photos':count})
                 data = self.body() if method in ('POST','PUT') else {}
                 db.execute('BEGIN IMMEDIATE')
                 response = self.mutate(db, route, method, data)
                 db.commit()
+                employee_admin.erase_deleted_photos(self.store,db)
             self.store.emit()
             self.send(response)
         except Problem as exc:
@@ -675,24 +745,35 @@ class Handler(BaseHTTPRequestHandler):
             admin = db.execute('SELECT * FROM admin').fetchone()
             if route == '/api/auth/status' and method == 'GET':
                 signed = False
+                role = None
+                base = ''
                 try:
-                    self.identity(db)
+                    who=self.identity(db)
+                    role = who['scope']
+                    base = who.get('base','')
                     signed = True
                 except Problem:
                     pass
-                return self.send({'setup_required':not bool(admin),'signed_in':signed})
+                return self.send({'setup_required':not bool(admin),'signed_in':signed,'role':role,'base':base})
             if route == '/api/auth/logout' and method == 'POST':
                 cookie = SimpleCookie(self.headers.get('Cookie',''))
                 if 'attendance_session' in cookie:
                     db.execute('DELETE FROM auth_sessions WHERE token_hash=?',(digest(cookie['attendance_session'].value),))
+                    db.execute('DELETE FROM staff_sessions WHERE token_hash=?',(digest(cookie['attendance_session'].value),))
                     db.execute('DELETE FROM attendance_access WHERE token_hash=?',(digest(cookie['attendance_session'].value),))
                 db.commit()
                 return self.send({'ok':True},headers={'Set-Cookie':'attendance_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'})
             if route not in ('/api/auth/setup','/api/auth/login','/api/auth/unlock-attendance') or method != 'POST':
                 raise Problem('Endpoint not found.',404)
             if route == '/api/auth/unlock-attendance':
-                self.identity(db)
-            password = self.body().get('password','')
+                unlock_who=self.identity(db)
+                if unlock_who['scope'] != 'admin':
+                    raise Problem('Administrator access required.',403)
+            credentials = self.body()
+            username = credentials.get('username','')
+            if not isinstance(username,str) or len(username)>80:
+                raise Problem('Invalid username.')
+            password = credentials.get('password','')
             if not isinstance(password,str) or len(password)>256:
                 raise Problem('Invalid password.')
             key = self.client_address[0]
@@ -701,6 +782,24 @@ class Handler(BaseHTTPRequestHandler):
                 raise Problem('Too many attempts. Try again in 5 minutes.',429)
             db.execute('BEGIN IMMEDIATE')
             admin = db.execute('SELECT * FROM admin').fetchone()
+            if route == '/api/auth/unlock-attendance' and unlock_who['id']!='admin':
+                admin=db.execute('SELECT * FROM staff WHERE username=? AND active=1',(unlock_who['id'],)).fetchone()
+            if username and route == '/api/auth/login':
+                staff = db.execute('SELECT * FROM staff WHERE username=? AND active=1',(username,)).fetchone()
+                # Perform the same password work for unknown usernames.
+                salt = staff['salt'] if staff else '0'*32
+                checked = password_hash(password,salt)
+                if not staff or not hmac.compare_digest(checked,staff['password']):
+                    failures += 1
+                    self.store.failures[key]=(failures,time.time()+300 if failures>=5 else 0)
+                    raise Problem('Incorrect username or password.',401)
+                self.store.failures.pop(key,None)
+                token = secrets.token_urlsafe(32)
+                db.execute('DELETE FROM staff_sessions WHERE expires<?',(time.time(),))
+                db.execute('INSERT INTO staff_sessions VALUES(?,?,?)',(digest(token),username,time.time()+8*3600))
+                self.store.audit(db,username,'staff_login',username,None,{'role':staff['role']})
+                db.commit()
+                return self.send({'ok':True,'role':staff['role']},headers={'Set-Cookie':self.session_cookie(token)})
             if route.endswith('setup'):
                 # The initial administrator can only be created from the PC itself.
                 if key not in ('127.0.0.1','::1'):
@@ -727,6 +826,11 @@ class Handler(BaseHTTPRequestHandler):
             db.commit()
             return self.send({'ok':True},headers={'Set-Cookie':self.session_cookie(token)})
 
+    def check_plant(self,db,eid):
+        plant=getattr(self,'plant','')
+        if plant and not db.execute('SELECT 1 FROM employees WHERE id=? AND base=?',(eid,plant)).fetchone():
+            raise Problem('Employee not found in your plant.',404)
+
     def sessions(self, db, query):
         start = query.get('from', [str(datetime.now(KL).date()-timedelta(days=7))])[0]
         end = query.get('to', [str(datetime.now(KL).date())])[0]
@@ -737,23 +841,93 @@ class Handler(BaseHTTPRequestHandler):
                 COALESCE(p.line,e.line) AS line,COALESCE(p.team,e.team) AS team
                 FROM sessions s JOIN employees e ON e.id=s.employee_id
                 LEFT JOIN employee_snapshots p ON p.session_id=s.id
-                WHERE s.work_date BETWEEN ? AND ? ORDER BY s.time_in DESC''', (start,end))]
+                WHERE s.work_date BETWEEN ? AND ? AND (?='' OR e.base=?) ORDER BY s.time_in DESC''', (start,end,getattr(self,'plant',''),getattr(self,'plant','')))]
 
     def state(self, db):
-        employees=self.store.employees(db)
-        return {'employees':employees,'attention_summary':self.store.attention_summary(db,employees),
+        employees=employee_admin.decorate(db,self.store.employees(db))
+        plant=getattr(self,'plant','')
+        if plant:
+            employees=[e for e in employees if e.get('base')==plant]
+        settings=self.store.settings(db)
+        if plant:
+            ids={e['id'] for e in employees}
+            settings['employee_order']=[eid for eid in settings.get('employee_order',[]) if eid in ids]
+        if getattr(self,'actor','admin') != 'admin':
+            who = self.identity(db)
+            if who['scope'] == 'employee_admin':
+                for e in employees:
+                    e.pop('session',None)
+                return {'employees':employees,'plant':plant,'schedules':[dict(r) for r in db.execute('SELECT * FROM schedules')],
+                        'assignments':[],'settings':settings,'devices':[],
+                        'recent_events':[],'revision':self.store.revision,'time':now_iso()}
+        return {'employees':employees,'plant':plant,'attention_summary':self.store.attention_summary(db,employees) if not plant else {'hours':0,'attendance':0,'scans':0,'total':0},
                 'schedules':[dict(r) for r in db.execute('SELECT * FROM schedules')],
-                'assignments':[dict(r) for r in db.execute('SELECT * FROM assignments ORDER BY start_date DESC')],
-                'settings':self.store.settings(db),
-                'devices':[{**{k:r[k] for k in ('id','name','scope','last_seen','health','active')},
+                'assignments':[dict(r) for r in db.execute("SELECT a.* FROM assignments a LEFT JOIN employees e ON e.id=a.employee_id WHERE (?='' OR e.base=?) ORDER BY start_date DESC",(plant,plant))],
+                'settings':settings,
+                'devices':[{**{k:r[k] for k in ('id','name','scope','last_seen','health','active','base')},
                             'online':bool(r['last_seen'] and (datetime.now(KL)-stamp(r['last_seen'])).total_seconds()<90)}
-                           for r in db.execute('SELECT * FROM devices')],
-                'recent_events':[dict(r) for r in db.execute('SELECT v.*,e.nickname,e.name FROM events v JOIN employees e ON e.id=v.employee_id ORDER BY received_at DESC LIMIT 30')],
+                           for r in db.execute("SELECT * FROM devices WHERE ?=''",(plant,))],
+                'recent_events':[dict(r) for r in db.execute("SELECT v.*,e.nickname,e.name FROM events v JOIN employees e ON e.id=v.employee_id WHERE (?='' OR e.base=?) ORDER BY received_at DESC LIMIT 30",(plant,plant))],
                 'revision':self.store.revision,'time':now_iso()}
 
     def mutate(self, db, route, method, data):
+        actor = getattr(self,'actor','admin')
+        plant=getattr(self,'plant','')
+        if plant and route.startswith('/api/employees') and method in ('POST','PUT'):
+            if 'base' in data and data['base']!=plant:
+                raise Problem('You cannot move employees to another plant.',403)
+            data={**data,'base':plant}
+            photo=data.get('photo_url','')
+            if isinstance(photo,str) and photo.startswith('/uploads/'):
+                foreign=db.execute("SELECT 1 FROM employees WHERE photo_url=? AND base<>?",(photo,plant)).fetchone()
+                owner=db.execute('SELECT actor FROM profile_photos WHERE url=?',(photo,)).fetchone()
+                if foreign or (owner and owner['actor']!=actor and not db.execute('SELECT 1 FROM employees WHERE photo_url=? AND base=?',(photo,plant)).fetchone()):
+                    raise Problem('Choose a profile photo belonging to this plant.',403)
+        if route.startswith('/api/staff/') and method == 'PUT':
+            username = route.split('/')[-1]
+            if not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}',username) or username == 'admin':
+                raise Problem('Choose a staff username other than admin.')
+            previous = db.execute('SELECT * FROM staff WHERE username=?',(username,)).fetchone()
+            role = data.get('role',previous['role'] if previous else 'employee_admin')
+            base = data.get('base',previous['base'] if previous else '')
+            if not isinstance(base,str) or (base and not re.fullmatch(r'[A-Z0-9][A-Z0-9 &_.-]{0,79}',base)):
+                raise Problem('Use an uppercase plant location of 1–80 characters, or blank for all plants.')
+            active = data.get('active',True)
+            if role not in ('admin','employee_admin') or type(active) is not bool:
+                raise Problem('Choose a valid role and active status.')
+            password = data.get('password')
+            if password is not None and (not isinstance(password,str) or not 12<=len(password)<=256):
+                raise Problem('Use a staff password between 12 and 256 characters.')
+            if not previous and password is None:
+                raise Problem('A password is required for new staff.')
+            salt = secrets.token_hex(16) if password is not None else previous['salt']
+            hashed = password_hash(password,salt) if password is not None else previous['password']
+            db.execute('INSERT INTO staff(username,salt,password,role,active,base) VALUES(?,?,?,?,?,?) ON CONFLICT(username) DO UPDATE SET salt=excluded.salt,password=excluded.password,role=excluded.role,active=excluded.active,base=excluded.base',(username,salt,hashed,role,int(active),base))
+            db.execute('DELETE FROM staff_sessions WHERE username=?',(username,))
+            self.store.audit(db,actor,'staff_updated',username,None,{'role':role,'active':active,'base':base})
+            return {'ok':True}
+        match = re.fullmatch(r'/api/employees/([A-Za-z0-9-]+)/(consents|photo)',route)
+        if match:
+            eid, kind = match.groups()
+            if not db.execute('SELECT 1 FROM employees WHERE id=?',(eid,)).fetchone():
+                raise Problem('Employee not found.',404)
+            if kind == 'consents' and method == 'GET':
+                return {'consents':[dict(r) for r in db.execute('SELECT * FROM employee_consents WHERE employee_id=? ORDER BY id DESC',(eid,))]}
+            if kind == 'consents' and method == 'POST':
+                employee_admin.record_consent(self.store,db,eid,data,actor,Problem,now_iso())
+                return {'ok':True}
+            if kind == 'photo' and method == 'DELETE':
+                url = db.execute('SELECT photo_url FROM employees WHERE id=?',(eid,)).fetchone()[0]
+                updated_at = datetime.now(KL).isoformat()
+                db.execute("UPDATE employees SET photo_url='',updated_at=? WHERE id=?",(updated_at,eid))
+                # Shared photos stay until all references have been removed.
+                if re.fullmatch(r'/uploads/[a-f0-9]+\.jpg',url or '') and not db.execute('SELECT 1 FROM employees WHERE photo_url=?',(url,)).fetchone():
+                    db.execute('INSERT INTO profile_photos VALUES(?,?,?,?) ON CONFLICT(url) DO UPDATE SET deleted_at=excluded.deleted_at',(url,actor,now_iso(),now_iso()))
+                self.store.audit(db,actor,'profile_photo_deleted',eid,{'photo_url':url},None)
+                return {'ok':True,'updated_at':updated_at}
         if route == '/api/manual-attendance' and method == 'POST':
             eid=str(data.get('employee_id',''))
+            self.check_plant(db,eid)
             e=db.execute('SELECT * FROM employees WHERE id=?',(eid,)).fetchone()
             if not e:
                 raise Problem('Employee not found.')
@@ -780,7 +954,9 @@ class Handler(BaseHTTPRequestHandler):
         if route == '/api/employees' and method == 'POST':
             self.store.validate_employee(db,data)
             self.store.insert_employee(db,data)
-            self.store.audit(db,'admin','employee_created',data['id'],None,data)
+            if data.get('consent_record') is not None:
+                employee_admin.record_consent(self.store,db,data['id'],data['consent_record'],actor,Problem,now_iso())
+            self.store.audit(db,actor,'employee_created',data['id'],None,{f:data.get(f) for f in FIELDS})
             return {'ok':True}
         if route.startswith('/api/employees/') and method in ('PUT','DELETE'):
             eid = route.split('/')[-1]
@@ -788,16 +964,20 @@ class Handler(BaseHTTPRequestHandler):
             if not previous:
                 raise Problem('Employee not found.',404)
             before = dict(previous)
+            if 'updated_at' in data and data['updated_at'] != before['updated_at']:
+                raise Problem('This employee changed since you opened the profile. Close and reopen it before saving.',409)
             after = {**before,**data,'id':eid}
             if method == 'DELETE':
                 if db.execute('SELECT 1 FROM sessions WHERE employee_id=? AND time_out IS NULL',(eid,)).fetchone():
                     raise Problem('Close or correct the open session before archiving this employee.',409)
                 after['active']=0
             self.store.validate_employee(db,after)
-            after['updated_at']=now_iso()
+            after['updated_at']=datetime.now(KL).isoformat()
             db.execute('UPDATE employees SET '+','.join(f'{f}=?' for f in FIELDS[1:])+',updated_at=? WHERE id=?',
                        [after.get(f,'') for f in FIELDS[1:]]+[after['updated_at'],eid])
-            self.store.audit(db,'admin','employee_archived' if method=='DELETE' else 'employee_updated',eid,before,after)
+            if data.get('consent_record') is not None:
+                employee_admin.record_consent(self.store,db,eid,data['consent_record'],actor,Problem,now_iso())
+            self.store.audit(db,actor,'employee_archived' if method=='DELETE' else 'employee_updated',eid,before,{f:after.get(f) for f in FIELDS})
             return {'ok':True}
         if route.startswith('/api/schedules/') and method == 'PUT':
             sid = route.split('/')[-1]
@@ -877,13 +1057,27 @@ class Handler(BaseHTTPRequestHandler):
         if route == '/api/devices' and method == 'POST':
             name=str(data.get('name','')).strip()
             scope=data.get('scope','kiosk')
+            base=data.get('base','')
+            if not isinstance(base,str) or (base and not re.fullmatch(r'[A-Z0-9][A-Z0-9 &_.-]{0,79}',base)):
+                raise Problem('Use an uppercase plant location of 1–80 characters.')
             if not name or scope not in ('kiosk','integration'):
                 raise Problem('Enter a name and select a valid access type.')
             token=secrets.token_urlsafe(32)
             did=str(uuid.uuid4())
-            db.execute('INSERT INTO devices(id,name,token_hash,scope) VALUES(?,?,?,?)',(did,name,digest(token),scope))
-            self.store.audit(db,'admin','device_registered',did,None,{'name':name,'scope':scope})
+            db.execute('INSERT INTO devices(id,name,token_hash,scope,base) VALUES(?,?,?,?,?)',(did,name,digest(token),scope,base))
+            self.store.audit(db,actor,'device_registered',did,None,{'name':name,'scope':scope,'base':base})
             return {'id':did,'token':token,'name':name}
+        if route.startswith('/api/devices/') and method == 'PUT':
+            did=route.split('/')[-1]
+            base=data.get('base','')
+            if not isinstance(base,str) or (base and not re.fullmatch(r'[A-Z0-9][A-Z0-9 &_.-]{0,79}',base)):
+                raise Problem('Use an uppercase plant location of 1–80 characters.')
+            if not db.execute('SELECT 1 FROM devices WHERE id=?',(did,)).fetchone():
+                raise Problem('Device not found.',404)
+            db.execute('UPDATE devices SET base=? WHERE id=?',(base,did))
+            db.execute('DELETE FROM metadata_receipts WHERE device_id=?',(did,))
+            self.store.audit(db,actor,'device_plant_updated',did,None,{'base':base})
+            return {'ok':True}
         if route.startswith('/api/devices/') and method == 'DELETE':
             did=route.split('/')[-1]
             db.execute('UPDATE devices SET active=0 WHERE id=?',(did,))
@@ -894,6 +1088,7 @@ class Handler(BaseHTTPRequestHandler):
             previous=db.execute('SELECT * FROM sessions WHERE id=?',(sid,)).fetchone()
             if not previous:
                 raise Problem('Session not found.',404)
+            self.check_plant(db,previous['employee_id'])
             reason=str(data.get('reason','')).strip()
             if len(reason)<5:
                 raise Problem('Explain the correction (at least 5 characters).')
@@ -919,6 +1114,7 @@ class Handler(BaseHTTPRequestHandler):
             event=db.execute('SELECT * FROM events WHERE id=?',(event_id,)).fetchone()
             if not event:
                 raise Problem('Scan not found.',404)
+            self.check_plant(db,event['employee_id'])
             reason=str(data.get('reason','')).strip()
             if len(reason)<5:
                 raise Problem('Explain the review decision.')
@@ -926,26 +1122,43 @@ class Handler(BaseHTTPRequestHandler):
             return {'ok':True}
         raise Problem('Endpoint not found.',404)
 
-    def photo(self, data):
+    def photo(self, data, db):
         from PIL import Image, ImageOps
+        saved_path = None
         try:
+            if not isinstance(data.get('data'),str):
+                raise Problem('Choose a valid JPG, PNG or WebP photo.')
             raw=base64.b64decode(data.get('data',''),validate=True)
             if len(raw)>5_000_000:
                 raise Problem('Choose a photo smaller than 5 MB.')
             with Image.open(io.BytesIO(raw)) as im:
+                if im.format not in ('JPEG','PNG','WEBP') or getattr(im,'n_frames',1) != 1:
+                    raise Problem('Choose a single-frame JPG, PNG or WebP photo.')
                 if im.width*im.height>20_000_000:
                     raise Problem('Photo dimensions are too large.')
                 im=ImageOps.exif_transpose(im).convert('RGB')
                 im.thumbnail((600,600))
                 folder=self.store.path.parent/'uploads'
-                folder.mkdir(exist_ok=True)
+                folder.mkdir(mode=0o700,exist_ok=True)
                 name=secrets.token_hex(16)+'.jpg'
-                im.save(folder/name,quality=88)
-            self.send({'url':'/uploads/'+name})
+                saved_path = folder/name
+                im.save(saved_path,quality=88)
+                os.chmod(saved_path,0o600)
+            url = '/uploads/'+name
+            try:
+                db.execute('INSERT INTO profile_photos VALUES(?,?,?,NULL)',(url,self.actor,now_iso()))
+                self.store.audit(db,self.actor,'profile_photo_uploaded',url,None,{'bytes':len(raw)})
+                db.commit()
+            except Exception:
+                (folder/name).unlink(missing_ok=True)
+                raise
         except Problem:
             raise
         except Exception:
+            if saved_path:
+                saved_path.unlink(missing_ok=True)
             raise Problem('Choose a valid JPG, PNG or WebP photo.')
+        self.send({'url':'/uploads/'+name})
 
     def events(self):
         self.send_response(200)
@@ -972,7 +1185,23 @@ class Handler(BaseHTTPRequestHandler):
             raise Problem('Method not allowed.',405)
         if route.startswith('/uploads/'):
             with self.store.connect() as db:
-                self.identity(db)
+                who = self.identity(db, allow_device=True)
+                if who['scope'] not in ('admin', 'employee_admin', 'integration'):
+                    raise Problem('Photo access requires admin or read-only integration access.', 403)
+                if not re.fullmatch(r'/uploads/[a-f0-9]+\.jpg', route):
+                    raise Problem('Photo not found.', 404)
+                if db.execute('SELECT 1 FROM profile_photos WHERE url=? AND deleted_at IS NOT NULL',(route,)).fetchone():
+                    raise Problem('Photo not found.',404)
+                plant=who.get('base','')
+                if plant and not db.execute('SELECT 1 FROM employees WHERE photo_url=? AND base=?',(route,plant)).fetchone():
+                    owned=db.execute('SELECT 1 FROM profile_photos WHERE url=? AND actor=?',(route,who['id'])).fetchone()
+                    referenced=db.execute('SELECT 1 FROM employees WHERE photo_url=?',(route,)).fetchone()
+                    if not owned or referenced:
+                        raise Problem('Photo not found.',404)
+                if who['scope'] == 'integration' and not db.execute(
+                    'SELECT 1 FROM employees WHERE photo_url=? AND active=1', (route,)
+                ).fetchone():
+                    raise Problem('Photo not found.', 404)
             root=self.store.path.parent/'uploads'
             candidate=root/route.split('/')[-1]
         else:

@@ -1,3 +1,5 @@
+import {employeeLocation} from './transfer-utils.js';
+import {syncLabel} from './employee-sync.js';
 import {paginateBoard} from './board-layout.js';
 import {productionSection,sortEmployees,employeeGroup} from './organisation.js';
 import React,{useState,useMemo,useRef,useLayoutEffect,useEffect} from 'react';
@@ -26,19 +28,22 @@ function BoardEmployee({employee:e,onDetails}){
   </button>;
 }
 function boardGroupName(employee){
-  return productionSection(employee)?employeeGroup(employee):employee.department||'Department unassigned';
+  return employeeLocation(employee)+' / '+(productionSection(employee)?employeeGroup(employee):employee.department||'Department unassigned');
 }
 function boardGroupOrder(a,b){
+  const [plantA,...groupA]=a.split(' / '),[plantB,...groupB]=b.split(' / ');
+  if(plantA!==plantB)return plantA.localeCompare(plantB);
+  a=groupA.join(' / ');b=groupB.join(' / ');
   const order=['OFFICE','FC','LM & SA','MAINTENANCE & FACILITIES','MF','QUALITY MANAGEMENT','R&D','ROLL MAKING','SAFETY & HEALTH','STORE'];
   const rank=name=>order.includes(name)?order.indexOf(name):order.length;
   const section=name=>name==='OFFICE'?0:name==='CONVERSION'||name.startsWith('CONVERSION · ')?1:name==='ROLL MAKING'||name.startsWith('ROLL MAKING · ')?2:3;
   return section(a)-section(b)||rank(a.split(' · ').at(-1))-rank(b.split(' · ').at(-1))||a.localeCompare(b);
 }
 function BoardRow({name,workers,onDetails,settings}){
-  const office=name==='OFFICE';
+  const office=workers[0]?.department==='OFFICE';
   const teams=office ? [['',workers]] : Object.entries(workers.reduce((out,e)=>{(out[e.team||'Unassigned']||=[]).push(e);return out},{})).sort(([a],[b])=>a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b));
   return <section className="tv-department board-group" aria-label={name}>
-    <div className="tv-department-title"><h3>{productionSection(workers[0])&&name.includes(' · ')&&<span className="board-section-name">{productionSection(workers[0])}</span>}{productionSection(workers[0])&&name.includes(' · ')?name.split(' · ').slice(1).join(' · '):name}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small></div>
+    <div className="tv-department-title"><h3>{name}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small></div>
     <div className="board-group-teams">{teams.map(([team,members])=><section className={'board-team-row '+(office?'office-row':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
       {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}>{team==='Unassigned'?'—':team}</h4>}
       <div className="tv-department-people">{sortPeople(members,'saved',settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}</div>
@@ -48,7 +53,7 @@ function BoardRow({name,workers,onDetails,settings}){
 export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,settings={}}){
   const [sort,setSort]=useState('saved'),[selected,setSelected]=useState('OFFICE'),[pages,setPages]=useState({});
   const directory=useRef(null),navigator=useRef(null);
-  const groups=useMemo(()=>Object.entries(employees.reduce((out,e)=>{(out[productionSection(e)?'PRODUCTION · '+productionSection(e):e.department||'Unassigned']||=[]).push(e);return out},{})).sort(([a],[b])=>departmentOrder(a,b)),[employees]);
+  const groups=useMemo(()=>Object.entries(employees.reduce((out,e)=>{(out[employeeLocation(e)+' / '+(productionSection(e)?'PRODUCTION · '+productionSection(e):e.department||'Unassigned')]||=[]).push(e);return out},{})).sort(([a],[b])=>departmentOrder(a,b)),[employees]);
   const signature=employees.map(e=>e.id).join('|');
   useEffect(()=>setPages({}),[signature,sort,settings.employee_sort,settings.employee_order?.join('|')]);
   const active=groups.some(([name])=>name===selected)||selected===null?selected:groups[0]?.[0];
@@ -69,7 +74,7 @@ export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,setti
       const open=active===department, page=Math.min(pages[department]||0,Math.max(0,Math.ceil(people.length/pageSize)-1));
       return <section className={'department-card '+(open?'department-open':'')} key={department}>
         <button className="department-card-heading" onClick={()=>open?setSelected(null):choose(department)} aria-expanded={open}><span className="department-symbol"><Users size={20}/></span><div><h2>{department}</h2><small>{people.length} people · {people.filter(e=>e.status==='IN').length} currently in</small></div><ChevronDown size={18} className={!open?'collapsed':''}/></button>
-        <div className={'department-collapse '+(open?'is-open':'')} aria-hidden={!open} inert={!open?true:undefined}><div className="department-collapse-inner"><div className="department-staff">{sortPeople(people,sort,settings).slice(page*pageSize,(page+1)*pageSize).map(e=><article className="staff-card" key={e.id}><div className="staff-card-top"><Photo employee={e}/><div className="staff-identity"><strong title={e.name}>{e.nickname||e.name}</strong><small>{e.id}</small></div><span className={'staff-status '+(e.status==='IN'?'in':'out')}><i/>{e.status}</span></div><div className="staff-details"><span>{e.position||'Employee'}{e.line?' · '+e.line:''}{e.office_department?' · '+e.office_department:''}{productionSection(e)&&productionSection(e)!==e.line?.trim().toUpperCase()?' · '+productionSection(e):''}</span><span>{e.team?'Team '+e.team:'No team'} · {e.effective_schedule?`${e.effective_schedule.start}–${e.effective_schedule.end}`:'Hours unassigned'}</span></div><div className="staff-actions"><button aria-label={'Edit '+e.name} onClick={()=>onEdit(e)}><Pencil size={13}/>Profile</button><button aria-label={'Update attendance for '+e.name} onClick={()=>onAttendance(e)}><Pencil size={13}/>Edit attendance</button>{e.active&&<button className={"quick-clock "+(e.status==='IN'?'clock-out':'clock-in')} disabled={busy} aria-label={(e.status==='IN'?'Clock out ':'Clock in ')+e.name} onClick={()=>onClock(e)}><Clock3 size={13}/>{e.status==='IN'?'Clock out':'Clock in'}</button>}</div></article>)}</div><footer className="department-pagination"><span>Showing {page*pageSize+1}–{Math.min((page+1)*pageSize,people.length)} of {people.length} employees</span><div><button disabled={page===0} onClick={()=>setPages({...pages,[department]:page-1})} aria-label={'Previous '+department+' employees'}>Previous</button><span>{page+1} / {Math.ceil(people.length/pageSize)}</span><button disabled={(page+1)*pageSize>=people.length} onClick={()=>setPages({...pages,[department]:page+1})} aria-label={'Next '+department+' employees'}>Next</button></div></footer></div></div>
+        <div className={'department-collapse '+(open?'is-open':'')} aria-hidden={!open} inert={!open?true:undefined}><div className="department-collapse-inner"><div className="department-staff">{sortPeople(people,sort,settings).slice(page*pageSize,(page+1)*pageSize).map(e=><article className="staff-card" key={e.id}><div className="staff-card-top"><Photo employee={e}/><div className="staff-identity"><strong title={e.name}>{e.nickname||e.name}</strong><small>{e.id}</small></div><span className={'staff-status '+(e.status==='IN'?'in':'out')}><i/>{e.status}</span></div><div className="staff-details"><span>{e.position||'Employee'}{e.line?' · '+e.line:''}{e.office_department?' · '+e.office_department:''}{productionSection(e)&&productionSection(e)!==e.line?.trim().toUpperCase()?' · '+productionSection(e):''}</span><span>{e.team?'Team '+e.team:'No team'} · {e.effective_schedule?`${e.effective_schedule.start}–${e.effective_schedule.end}`:'Hours unassigned'}</span></div><small className="staff-sync" role="status">Details: {syncLabel(e.metadata_sync?.status)}</small><div className="staff-actions"><button aria-label={'Edit '+e.name} onClick={()=>onEdit(e)}><Pencil size={13}/>Profile</button>{onAttendance&&<button aria-label={'Update attendance for '+e.name} onClick={()=>onAttendance(e)}><Pencil size={13}/>Edit attendance</button>}{e.active&&onClock&&<button className={"quick-clock "+(e.status==='IN'?'clock-out':'clock-in')} disabled={busy} aria-label={(e.status==='IN'?'Clock out ':'Clock in ')+e.name} onClick={()=>onClock(e)}><Clock3 size={13}/>{e.status==='IN'?'Clock out':'Clock in'}</button>}</div></article>)}</div><footer className="department-pagination"><span>Showing {page*pageSize+1}–{Math.min((page+1)*pageSize,people.length)} of {people.length} employees</span><div><button disabled={page===0} onClick={()=>setPages({...pages,[department]:page-1})} aria-label={'Previous '+department+' employees'}>Previous</button><span>{page+1} / {Math.ceil(people.length/pageSize)}</span><button disabled={(page+1)*pageSize>=people.length} onClick={()=>setPages({...pages,[department]:page+1})} aria-label={'Next '+department+' employees'}>Next</button></div></footer></div></div>
       </section>;
     })}</div>{!employees.length&&<div className="empty"><Search size={30}/><h3>No matching employees</h3><p>Try a different search or filter.</p></div>}
   </>;

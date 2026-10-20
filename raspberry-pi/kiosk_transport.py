@@ -143,15 +143,21 @@ class ReliableTransport:
                     self.cooldown_seconds=data.get('cooldown_seconds',300)
                     self.set_cache(data['employees'])
                     temp=self.directory/'employees-cache.tmp'
-                    temp.write_text(json.dumps(data),encoding='utf-8')
+                    with temp.open('w',encoding='utf-8') as cache_file:
+                        json.dump(data,cache_file)
+                        cache_file.flush()
+                        os.fsync(cache_file.fileno())
                     os.replace(temp,self.directory/'employees-cache.json')
+                    # Acknowledge only metadata already saved to the offline cache.
+                    acknowledgement = {'metadata_version':data['metadata_version']} if data.get('metadata_version') else {}
                     health_db=self.connect()
                     try:
                         rejected=health_db.execute("SELECT COUNT(*) FROM outbox WHERE state='rejected'").fetchone()[0]
                     finally:
                         health_db.close()
                     self.request('/api/heartbeat',{'camera':self.camera_health,'ai':self.ai_health,
-                                                  'pending_scans':self.pending(),'rejected_scans':rejected}).raise_for_status()
+                                                  'pending_scans':self.pending(),'rejected_scans':rejected,
+                                                  **acknowledgement}).raise_for_status()
                     next_health=time.monotonic()+20
                 db=self.connect()
                 item=db.execute("SELECT * FROM outbox WHERE state='pending' ORDER BY created_at, event_id LIMIT 1").fetchone()
