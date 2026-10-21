@@ -441,7 +441,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.request('/api/state')[1]['employees'][0]['effective_schedule']['id'],'day-ot')
         self.request('/api/employees/123','PUT',{'team':'B'})
         self.assertEqual(self.request('/api/state')[1]['employees'][0]['effective_schedule']['id'],'night')
-        for invalid in ({'team_schedules':{'C':'day'}},{'team_schedules':{'A':'missing'}},{'team_schedules':[]},{'team_overtime':{'A':'yes'}}):
+        for invalid in ({'team_schedules':{'Z':'day'}},{'team_schedules':{'A':'missing'}},{'team_schedules':[]},{'team_overtime':{'A':'yes'}}):
             self.assertEqual(self.request('/api/settings','PUT',invalid)[0],400)
         self.assertEqual(self.request('/api/state')[1]['settings']['team_schedules'],body['team_schedules'])
 

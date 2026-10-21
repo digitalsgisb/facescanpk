@@ -17,6 +17,7 @@ import zipfile
 import ssl
 import employee_admin
 import testing_operations
+import plant_workflows
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone, date
 from http.cookies import SimpleCookie
@@ -35,10 +36,8 @@ TEMPLATES = [
     ('night', 'Night shift', '16:15', '00:30', 0),
     ('night-ot', 'Night shift + OT', '20:00', '08:00', 1),
 ]
-PENDING_REVIEW = """json_extract(v.result,'$.action')='REVIEW'
-    AND NOT EXISTS(SELECT 1 FROM audit a WHERE a.entity_id=v.id AND a.action='scan_reviewed')"""
-ATTENTION_SESSION = """(json_array_length(s.flags)>0 OR
-    (s.time_out IS NULL AND julianday(s.time_in)<julianday(?)))"""
+PENDING_REVIEW = plant_workflows.PENDING_REVIEW
+ATTENTION_SESSION = plant_workflows.ATTENTION_SESSION
 
 
 class Problem(Exception):
@@ -100,8 +99,8 @@ def validate_team_settings(db, config):
         raise Problem('Invalid team settings.')
     for key in ('team_schedules','team_overtime'):
         value=config.get(key,{})
-        if not isinstance(value,dict) or any(team not in ('A','B','N') for team in value):
-            raise Problem('Choose working hours for teams A, B or N.')
+        if not isinstance(value,dict) or any(team not in ('A','B','C','D','N') for team in value):
+            raise Problem('Choose a valid team.')
         for choice in value.values():
             if key=='team_overtime':
                 if not isinstance(choice,bool):
@@ -113,6 +112,8 @@ def validate_team_settings(db, config):
         if not isinstance(rotation,dict):
             raise Problem('Invalid rotation.')
         day(rotation.get('anchor_date'))
+        if 'teams' in rotation and rotation['teams'] not in (['A','B'],['C','D']):
+            raise Problem('Choose A/B or C/D rotation.')
         if type(rotation.get('interval_days')) is not int or not 1<=rotation['interval_days']<=60:
             raise Problem('Rotation interval must be between 1 and 60 days.')
         ids=rotation.get('schedule_ids',[])
@@ -168,6 +169,7 @@ class Store:
             ''')
             employee_admin.migrate(db)
             testing_operations.migrate(db)
+            plant_workflows.migrate(db)
             columns={r['name'] for r in db.execute('PRAGMA table_info(employees)')}
             for column in ('production_section','office_department','checksheet_group','company','base','employment_department','job_type'):
                 if column not in columns:
@@ -250,38 +252,14 @@ class Store:
     def settings(self, db):
         return {r['key']:json.loads(r['value']) for r in db.execute('SELECT * FROM settings')}
 
-    def attention_summary(self, db, employees=None):
-        employees=self.employees(db) if employees is None else employees
-        cutoff=(datetime.now(KL)-timedelta(hours=self.settings(db)['max_open_hours'])).isoformat()
-        counts={'hours':sum(1 for employee in employees if employee['active'] and not employee['effective_schedule']),
-                'attendance':db.execute('SELECT COUNT(*) FROM sessions s WHERE '+ATTENTION_SESSION,(cutoff,)).fetchone()[0],
-                'scans':db.execute('SELECT COUNT(*) FROM events v WHERE '+PENDING_REVIEW).fetchone()[0]}
-        return {**counts,'total':sum(counts.values())}
+    def attention_summary(self, db, employees=None, plant=''):
+        return plant_workflows.summary(self,db,plant,employees)
 
-    def attention_page(self, db, category, offset, limit):
-        summary=self.attention_summary(db)
-        # Clamp after resolution so an emptied last page returns the preceding page.
-        offset=min(offset,max(0,((summary[category]-1)//limit)*limit))
-        if category=='hours':
-            people=sorted((e for e in self.employees(db) if e['active'] and not e['effective_schedule']),key=lambda e:((e['nickname'] or e['name']).casefold(),e['id']))
-            items=people[offset:offset+limit]
-        elif category=='attendance':
-            cutoff=(datetime.now(KL)-timedelta(hours=self.settings(db)['max_open_hours'])).isoformat()
-            items=[dict(row) for row in db.execute('''SELECT s.*,COALESCE(p.name,e.name) AS name,
-                COALESCE(p.nickname,e.nickname) AS nickname,COALESCE(p.department,e.department) AS department,
-                COALESCE(p.line,e.line) AS line,COALESCE(p.team,e.team) AS team,e.base AS base
-                FROM sessions s JOIN employees e ON e.id=s.employee_id
-                LEFT JOIN employee_snapshots p ON p.session_id=s.id WHERE '''+ATTENTION_SESSION+
-                ' ORDER BY s.time_in ASC,s.id LIMIT ? OFFSET ?',(cutoff,limit,offset))]
-            for item in items:
-                item['stale_session']=not item['time_out'] and stamp(item['time_in'])<stamp(cutoff)
-        else:
-            items=[dict(row) for row in db.execute('''SELECT v.*,e.name,e.nickname,e.department,e.line,e.team
-                FROM events v JOIN employees e ON e.id=v.employee_id WHERE '''+PENDING_REVIEW+
-                ' ORDER BY v.occurred_at ASC,v.id LIMIT ? OFFSET ?',(limit,offset))]
-        return {'summary':summary,'category':category,'items':items,'offset':offset,'limit':limit,'total':summary[category]}
+    def attention_page(self, db, category, offset, limit, plant=''):
+        return plant_workflows.page(self,db,category,offset,limit,plant)
 
     def resolve_schedule(self, db, e, work_date):
+        e=dict(e)
         scopes=schedule_scopes(e)
         rows=list(db.execute('SELECT * FROM assignments WHERE start_date<=? AND end_date>=? AND (employee_id=? OR ((employee_id IS NULL OR employee_id=\'\') AND team=?)) ORDER BY start_date DESC',
                              (str(work_date),str(work_date),e['id'],e['team'])))
@@ -289,8 +267,8 @@ class Store:
         team=next((row for scope in [*scopes,''] for row in rows if not row['employee_id'] and row['team']==e['team'] and row['scope']==scope),None)
         override=personal or team
         if override:
-            return db.execute('SELECT * FROM schedules WHERE id=?', (override['schedule_id'],)).fetchone()
-        settings = self.settings(db)
+            return plant_workflows.schedule(db,override['schedule_id'],e.get('base',''))
+        settings = plant_workflows.schedule_settings(db,e.get('base',''),self.settings(db))
         settings=next((settings['schedule_groups'][scope] for scope in scopes if scope in settings['schedule_groups']),settings)
         rotation = settings.get('rotation')
         def team_hours(schedule_id):
@@ -298,16 +276,17 @@ class Store:
             overtime = settings.get('team_overtime',{})
             if base in ('day','night') and e['team'] in overtime:
                 schedule_id = base+('-ot' if overtime[e['team']] else '')
-            return db.execute('SELECT * FROM schedules WHERE id=?', (schedule_id,)).fetchone()
-        if rotation and e['team'] in ('A', 'B') and work_date >= day(rotation['anchor_date']):
+            return plant_workflows.schedule(db,schedule_id,e.get('base',''))
+        pair=rotation.get('teams',['A','B']) if rotation else ['A','B']
+        if rotation and e['team'] in pair and work_date >= day(rotation['anchor_date']):
             index = ((work_date-day(rotation['anchor_date'])).days // rotation['interval_days']) % 2
-            if e['team'] == 'B':
+            if e['team'] == pair[1]:
                 index = 1-index
             return team_hours(rotation['schedule_ids'][index])
         team_schedule = settings.get('team_schedules',{}).get(e['team'])
         if team_schedule:
             return team_hours(team_schedule)
-        return db.execute('SELECT * FROM schedules WHERE id=?', (e['schedule_id'],)).fetchone()
+        return plant_workflows.schedule(db,e['schedule_id'],e.get('base',''))
 
     def planned(self, schedule, work_date):
         start = datetime.fromisoformat(f'{work_date}T{schedule["start"]}:00').replace(tzinfo=KL)
@@ -321,8 +300,8 @@ class Store:
             raise Problem('Employee ID must contain 1–40 letters, numbers or hyphens.')
         if not str(e.get('name', '')).strip():
             raise Problem('Full name is required.')
-        if e.get('team', '') not in ('', 'A', 'B', 'N'):
-            raise Problem('Select team A, B, N or unassigned.')
+        if e.get('team', '') not in ('', 'A', 'B', 'C', 'D', 'N'):
+            raise Problem('Select a team or leave it unassigned.')
         if e.get('production_section','') not in ('','CONVERSION','ROLL MAKING'):
             raise Problem('Choose Conversion, Roll Making or automatic section.')
         if e.get('checksheet_group','') not in ('','fc1','fc2','fc3'):
@@ -569,7 +548,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.actor = who['id']
                 self.plant = who.get('base','')
                 if self.plant and scope == 'admin':
-                    allowed=(method=='GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/review','/api/clock-access')) or (method in ('POST','DELETE') and route in ('/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/apply')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
+                    allowed=(method=='GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/review','/api/clock-access','/api/attention','/api/plant-controls')) or (method in ('POST','DELETE') and route in ('/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/apply','/api/reviews/preview','/api/reviews/bulk')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
+                    if route=='/api/plant-controls' and method=='PUT':allowed=True
                     if not allowed:
                         raise Problem('This account manages its assigned plant only.',403)
                 if self.plant and route.startswith('/api/employees/'):
@@ -600,7 +580,7 @@ class Handler(BaseHTTPRequestHandler):
                                       'metadata_version':employee_admin.version(employees),
                                       'connection_scope':scope})
                 if route == '/api/schedules' and method == 'GET':
-                    return self.send({'schedules':[dict(r) for r in db.execute('SELECT * FROM schedules')]})
+                    return self.send({'schedules':[plant_workflows.schedule(db,r['id'],self.plant) for r in db.execute('SELECT id FROM schedules')]})
                 if route == '/api/scans' and method == 'POST':
                     if scope != 'kiosk':
                         raise Problem('Use a registered kiosk to submit scans.', 403)
@@ -636,7 +616,32 @@ class Handler(BaseHTTPRequestHandler):
                         raise Problem('Invalid issue page.')
                     if offset<0 or not 1<=limit<=100:
                         raise Problem('Invalid issue page.')
-                    return self.send(self.store.attention_page(db,category,offset,limit))
+                    base=plant_workflows.scope(self.plant,query.get('base',[None])[0],Problem)
+                    return self.send(self.store.attention_page(db,category,offset,limit,base))
+                if route == '/api/plant-controls' and method in ('GET','PUT'):
+                    if scope!='admin':raise Problem('Administrator access required.',403)
+                    data=self.body() if method=='PUT' else {}
+                    base=plant_workflows.scope(self.plant,data.get('base') if method=='PUT' else query.get('base',[None])[0],Problem)
+                    if method=='GET':return self.send(plant_workflows.controls(self.store,db,base))
+                    db.execute('BEGIN IMMEDIATE')
+                    result=plant_workflows.save_controls(self.store,db,base,{k:v for k,v in data.items() if k!='base'},self.actor,validate_team_settings,validate_scope,Problem,now_iso())
+                    db.commit();self.store.emit()
+                    return self.send(result)
+                if route in ('/api/reviews/preview','/api/reviews/bulk') and method=='POST':
+                    if scope!='admin':raise Problem('Administrator access required.',403)
+                    data=self.body();db.execute('BEGIN IMMEDIATE')
+                    if route.endswith('/preview'):result,_=plant_workflows.review_preview(self.store,db,data,self.plant,Problem)
+                    else:result=plant_workflows.review_apply(self.store,db,data,self.actor,self.plant,Problem,now_iso())
+                    db.commit()
+                    if route.endswith('/bulk'):self.store.emit()
+                    return self.send(result)
+                if route=='/api/automatic-clockout' and method in ('GET','PUT'):
+                    if scope!='admin' or self.plant:raise Problem('All-plants administrator access required.',403)
+                    if method=='GET':return self.send(plant_workflows.clockout_config(db))
+                    data=self.body();db.execute('BEGIN IMMEDIATE')
+                    result=plant_workflows.save_clockout(self.store,db,data,self.actor,Problem,datetime.now(KL).isoformat())
+                    db.commit();self.store.emit()
+                    return self.send(result)
                 if route == '/api/clock-access' and method == 'GET':
                     access = db.execute('SELECT expires FROM attendance_access WHERE token_hash=? AND expires>?',
                                         (digest(self.session_token), time.time())).fetchone()
@@ -694,10 +699,10 @@ class Handler(BaseHTTPRequestHandler):
                 if route == '/api/audit' and method == 'GET':
                     return self.send({'audit':[dict(r) for r in db.execute('SELECT * FROM audit ORDER BY id DESC LIMIT 200')]})
                 if route == '/api/review' and method == 'GET':
-                    return self.send({'events':[dict(r) for r in db.execute('''SELECT v.*,e.name,e.nickname FROM events v
+                    return self.send({'events':[dict(r) for r in db.execute('''SELECT v.*,e.name,e.nickname,e.base FROM events v
                         JOIN employees e ON e.id=v.employee_id WHERE json_extract(v.result,'$.action')='REVIEW'
                         AND NOT EXISTS(SELECT 1 FROM audit a WHERE a.entity_id=v.id AND a.action='scan_reviewed')
-                        AND (?='' OR e.base=?) ORDER BY v.occurred_at DESC LIMIT 1000''',(self.plant,self.plant))]})
+                        AND (?='' OR e.base=?) ORDER BY v.occurred_at DESC LIMIT 1000''',(self.plant,self.plant)) if plant_workflows.review_enabled(db,self.plant) and plant_workflows.review_enabled(db,r['base'])]})
                 if route == '/api/backup' and method == 'GET':
                     backup = self.store.path.parent / ('backup-'+str(uuid.uuid4())+'.sqlite3')
                     try:
@@ -848,7 +853,7 @@ class Handler(BaseHTTPRequestHandler):
         plant=getattr(self,'plant','')
         if plant:
             employees=[e for e in employees if e.get('base')==plant]
-        settings=self.store.settings(db)
+        settings=plant_workflows.schedule_settings(db,plant,self.store.settings(db))
         if plant:
             ids={e['id'] for e in employees}
             settings['employee_order']=[eid for eid in settings.get('employee_order',[]) if eid in ids]
@@ -857,11 +862,13 @@ class Handler(BaseHTTPRequestHandler):
             if who['scope'] == 'employee_admin':
                 for e in employees:
                     e.pop('session',None)
-                return {'employees':employees,'plant':plant,'schedules':[dict(r) for r in db.execute('SELECT * FROM schedules')],
+                return {'employees':employees,'plant':plant,'schedules':[plant_workflows.schedule(db,r['id'],plant) for r in db.execute('SELECT id FROM schedules')],
                         'assignments':[],'settings':settings,'devices':[],
                         'recent_events':[],'revision':self.store.revision,'time':now_iso()}
-        return {'employees':employees,'plant':plant,'attention_summary':self.store.attention_summary(db,employees) if not plant else {'hours':0,'attendance':0,'scans':0,'total':0},
-                'schedules':[dict(r) for r in db.execute('SELECT * FROM schedules')],
+        return {'employees':employees,'plant':plant,'review_enabled':plant_workflows.review_enabled(db,plant),'attention_summary':self.store.attention_summary(db,employees,plant),
+                'plant_controls':{base:plant_workflows.controls(self.store,db,base)['settings'] for base in {e.get('base','') for e in employees}},
+                'plant_templates':{base:[plant_workflows.schedule(db,r['id'],base) for r in db.execute('SELECT id FROM schedules')] for base in {e.get('base','') for e in employees}},
+                'schedules':[plant_workflows.schedule(db,r['id'],plant) for r in db.execute('SELECT id FROM schedules')],
                 'assignments':[dict(r) for r in db.execute("SELECT a.* FROM assignments a LEFT JOIN employees e ON e.id=a.employee_id WHERE (?='' OR e.base=?) ORDER BY start_date DESC",(plant,plant))],
                 'settings':settings,
                 'devices':[{**{k:r[k] for k in ('id','name','scope','last_seen','health','active','base')},
@@ -1007,7 +1014,7 @@ class Handler(BaseHTTPRequestHandler):
             if employee:
                 if not db.execute('SELECT 1 FROM employees WHERE id=? AND active=1',(employee,)).fetchone():
                     raise Problem('Employee not found.')
-            elif team not in ('A','B','N'):
+            elif team not in ('A','B','C','D','N'):
                 raise Problem('Select a team or employee.')
             if not db.execute('SELECT 1 FROM schedules WHERE id=?',(data.get('schedule_id'),)).fetchone():
                 raise Problem('Choose a schedule.')
@@ -1245,6 +1252,7 @@ if __name__=='__main__':
         context.load_cert_chain(args.certfile,args.keyfile)
         server.socket=context.wrap_socket(server.socket,server_side=True)
         server.is_tls=True
+    clockout_stop,clockout_thread=plant_workflows.start_clockout_worker(server.store)
     backup_stop=threading.Event()
     def daily_backup():
         while not backup_stop.is_set():
@@ -1262,4 +1270,5 @@ if __name__=='__main__':
         server.serve_forever()
     except KeyboardInterrupt:
         backup_stop.set()
+        clockout_stop.set()
         server.server_close()

@@ -22,12 +22,12 @@ export function EmployeeImport({api,onRefresh,base=''}) {
     }catch(e){setMessage(e.message);if(e.status===409){setReport(null);pending.current=null}}
     finally{saving.current=false;setBusy(false)}
   }
-  return <section className="card form-pad employee-import"><h2>Import employee details</h2>
-    <p>Location: {base||'All plants'}. Choose a prepared employee JSON file, review the changes, then apply. Existing photos, teams, lines, schedules and active status are preserved. Position follows the sheet’s Job Type exactly.</p>
+  return <details className="card form-pad employee-import"><summary>Import employees</summary>
+    <p>{base||'All plants'} · Preview before applying. Existing photos and shifts stay.</p>
     <label>Employee update file<input type="file" accept="application/json,.json" disabled={busy} onChange={e=>{preview(e.target.files?.[0]);e.target.value=''}}/></label>
     {report&&<><p role="status">{report.summary.create} new · {report.summary.update} updates · {report.summary.unchanged} unchanged · {report.summary.preserved_not_in_file} existing employees absent from the file will be kept.</p>
       <details><summary>Review employee changes ({report.changes.length})</summary><div style={{maxHeight:400,overflow:'auto'}}>{report.changes.map(c=><div key={c.id}><strong>{c.id} · {c.base} · {c.action}</strong>{Object.entries(c.changes).map(([field,v])=><p key={field}>{field}: {v.before??'(new)'} → {v.after}</p>)}</div>)}</div></details>
       <button className="primary" disabled={busy} onClick={apply}>{busy?'Applying…':'Back up and apply reviewed changes'}</button></>}
     {message&&<p role="status">{message}</p>}
-  </section>;
+  </details>;
 }

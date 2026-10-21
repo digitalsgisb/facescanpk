@@ -1,3 +1,4 @@
+import {filterBoardPlant} from './plant-view.js';
 import {employeeLocation} from './transfer-utils.js';
 import {syncLabel} from './employee-sync.js';
 import {paginateBoard} from './board-layout.js';
@@ -51,15 +52,16 @@ function BoardRow({name,workers,onDetails,settings}){
   </section>;
 }
 export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,settings={}}){
-  const [sort,setSort]=useState('saved'),[selected,setSelected]=useState('OFFICE'),[pages,setPages]=useState({});
+  const [sort,setSort]=useState('saved'),[selected,setSelected]=useState('PORT KLANG / OFFICE'),[pages,setPages]=useState({});
   const directory=useRef(null),navigator=useRef(null);
+  const [shortcutsOpen,setShortcutsOpen]=useState(false);
   const groups=useMemo(()=>Object.entries(employees.reduce((out,e)=>{(out[employeeLocation(e)+' / '+(productionSection(e)?'PRODUCTION · '+productionSection(e):e.department||'Unassigned')]||=[]).push(e);return out},{})).sort(([a],[b])=>departmentOrder(a,b)),[employees]);
   const signature=employees.map(e=>e.id).join('|');
   useEffect(()=>setPages({}),[signature,sort,settings.employee_sort,settings.employee_order?.join('|')]);
   const active=groups.some(([name])=>name===selected)||selected===null?selected:groups[0]?.[0];
-  const displayedGroups=[...groups].sort(([a],[b])=>(a===active?0:1)-(b===active?0:1)||departmentOrder(a,b));
+  const displayedGroups=groups.filter(([name])=>name===active);
   function choose(dept){
-    setSelected(dept);
+    setSelected(dept);setShortcutsOpen(false);
     requestAnimationFrame(()=>{
       if(!directory.current)return;
       const offset=(document.querySelector('.topbar')?.offsetHeight||0)+(navigator.current?.offsetHeight||0)+24;
@@ -69,7 +71,8 @@ export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,setti
   const pageSize=8;
   return <>
     <div className="group-view-toolbar"><span><Users size={16}/>{groups.length} groups · {employees.length} employees</span><label><ArrowUpDown size={15}/>Sort people<select aria-label="Sort employee cards" value={sort} onChange={e=>setSort(e.target.value)}><option value="saved">Saved display order</option><option value="manual">Manual order</option><option value="name">Name A–Z</option><option value="team">Team & production line</option><option value="role">Role seniority</option><option value="status">Clocked in first</option></select></label></div>
-    <nav ref={navigator} className="department-navigator" aria-label="Department shortcuts">{groups.map(([dept,people])=><button key={dept} className={active===dept?'current':''} onClick={()=>choose(dept)} aria-pressed={active===dept}>{dept}<span>{people.length}</span></button>)}</nav>
+    <details ref={navigator} className="directory-shortcuts" open={shortcutsOpen} onToggle={e=>setShortcutsOpen(e.currentTarget.open)}><summary>Groups ({groups.length})</summary><nav className="department-navigator" aria-label="Department shortcuts">{groups.map(([dept,people])=><button key={dept} className={active===dept?'current':''} onClick={()=>choose(dept)} aria-pressed={active===dept}>{dept}<span>{people.length}</span></button>)}</nav></details>
+    <label className="directory-group-select">Group<select aria-label="Employee group" value={active||''} onChange={e=>choose(e.target.value)}><option value="">Choose group</option>{groups.map(([name,people])=><option key={name} value={name}>{name} ({people.length})</option>)}</select></label>
     <div ref={directory} className="employee-departments compact-directory">{displayedGroups.map(([department,people],i)=>{
       const open=active===department, page=Math.min(pages[department]||0,Math.max(0,Math.ceil(people.length/pageSize)-1));
       return <section className={'department-card '+(open?'department-open':'')} key={department}>
@@ -80,11 +83,15 @@ export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,setti
   </>;
 }
 
-export function LiveBoard({employees,settings={},live,onDetails,soundControl,onAdminControls,detailsOpen=false}){
+export function LiveBoard({employees,settings={},live,onDetails,soundControl,onAdminControls,detailsOpen=false,plant=''}){
   const [query,setQuery]=useState(''),[onlyIn,setOnlyIn]=useState(false),[fit,setFit]=useState(false),[fullscreen,setFullscreen]=useState(false);
   const [mode,setMode]=useState('large'),[page,setPage]=useState(0),[rotating,setRotating]=useState(true),[dimensions,setDimensions]=useState({width:1200,height:600});
+  const [boardPlant,setBoardPlant]=useState(()=>{try{return localStorage.getItem('attendance-board-plant')||'PORT KLANG'}catch{return 'PORT KLANG'}});
+  const locations=[...new Set(employees.map(employeeLocation))].sort(),chosen=plant||(boardPlant==='*'||locations.includes(boardPlant)?boardPlant:'*');
+  const visibleEmployees=filterBoardPlant(employees,chosen);
+  function changePlant(value){setBoardPlant(value);setPage(0);try{localStorage.setItem('attendance-board-plant',value)}catch{}}
   const root=useRef(null),stage=useRef(null),windowRef=useRef(null);
-  const people=useMemo(()=>employees.filter(e=>(!onlyIn||e.status==='IN')&&(!query||[e.name,e.nickname,e.id,e.department,e.line,e.position,e.office_department,productionSection(e)].some(s=>s?.toLowerCase().includes(query.toLowerCase())))),[employees,onlyIn,query]);
+  const people=useMemo(()=>visibleEmployees.filter(e=>(!onlyIn||e.status==='IN')&&(!query||[e.name,e.nickname,e.id,e.department,e.line,e.position,e.office_department,productionSection(e)].some(s=>s?.toLowerCase().includes(query.toLowerCase())))),[employees,chosen,onlyIn,query]);
   const groups=useMemo(()=>Object.entries(people.reduce((out,e)=>{(out[boardGroupName(e)]||=[]).push(e);return out},{})).sort(([a],[b])=>boardGroupOrder(a,b)).map(([name,workers])=>[name,sortPeople(workers,'saved',settings).sort((a,b)=>name==='OFFICE'?0:(a.team||'').localeCompare(b.team||''))]),[people,settings.employee_sort,settings.employee_order]);
   const pages=useMemo(()=>paginateBoard(groups,dimensions),[groups,dimensions]);
   const currentPage=Math.min(page,pages.length-1),shown=fit&&mode==='large'?pages[currentPage]:groups;
@@ -108,7 +115,7 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
   async function toggleFullscreen(){if(fullscreen){if(document.fullscreenElement)await document.exitFullscreen();else setFullscreen(false);return;}setFit(true);setQuery('');setOnlyIn(false);try{await root.current.requestFullscreen()}catch{setFullscreen(true)}}
   async function admin(){if(document.fullscreenElement)await document.exitFullscreen();setFullscreen(false);onAdminControls?.();}
   return <section ref={root} className={'board-page redesigned-board '+(fit?'fit-all ':'')+(fullscreen?'tv-mode ':'')+(mode==='large'?'large-photo-board':'native-overview-board')}>
-    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>Port Klang · attendance workspace</small></div></div><div className="board-totals"><div><b>{employees.length}</b><small>Employees</small></div><div><b>{employees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button><button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{onAdminControls&&<button className="primary" onClick={admin}>Admin controls</button>}</div></header>
+    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>{chosen==='*'?'All plants':chosen}</small></div></div><div className="board-totals">{!plant&&<label className="board-plant-select">Plant<select aria-label="TV board plant" value={chosen} onChange={e=>changePlant(e.target.value)}><option value="*">All plants</option>{locations.map(p=><option key={p}>{p}</option>)}</select></label>}<div><b>{visibleEmployees.length}</b><small>Employees</small></div><div><b>{visibleEmployees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button><button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{onAdminControls&&<button className="primary" onClick={admin}>Admin controls</button>}</div></header>
     {!fullscreen&&<div className="board-toolbar"><div className="search"><Search size={17}/><input aria-label="Search live board" placeholder="Find a person, department or line…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/></div><label className="checkbox-label"><input type="checkbox" checked={onlyIn} onChange={e=>{setOnlyIn(e.target.checked);setPage(0)}}/>Show clocked-in employees only</label><button className="secondary" onClick={()=>setFit(!fit)}>{fit?'Scrollable view':'Fit screen'}</button></div>}
     <div className="board-stage-window" ref={windowRef}><div className="board-stage" ref={stage}>{shown.map(([name,workers])=><BoardRow key={name} name={name} workers={workers} settings={settings} onDetails={onDetails}/>)}</div></div>
     {fit&&mode==='large'&&<div className="tv-fit-footer"><strong>{mode==='large'?shownCount+' of '+people.length+' employees · Larger photos':people.length+' employees · Compact overview'}</strong>{mode==='large'&&<div className="board-page-controls"><button disabled={pages.length<2} onClick={()=>setPage((currentPage+pages.length-1)%pages.length)} aria-label="Previous TV page">Previous</button><span>Page {currentPage+1} / {pages.length}</span><button disabled={pages.length<2} onClick={()=>setPage((currentPage+1)%pages.length)} aria-label="Next TV page">Next</button><button onClick={()=>setRotating(!rotating)}>{rotating?'Pause rotation':'Resume rotation'}</button></div>}<span>View only · Click a card for details</span></div>}

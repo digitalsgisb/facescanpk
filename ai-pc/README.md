@@ -213,3 +213,7 @@ See [employee administration](EMPLOYEE-ADMIN.md) for staff roles, consent histor
 ## Testing reset and multi-plant rollout
 
 See [the plant rollout guide](PLANT-ROLLOUT.md) for clocking everyone out safely, importing the HR workbook with exact positions, separate Port Klang/Sendayan accounts, the developer account, and backed-up code/data transfer.
+
+## Bulk reviews, plant shifts and scheduled clock-out
+
+See [the controls guide](REVIEW-SHIFTS.md) for bulk review, review prompt settings, PK A/B and Sendayan C/D shifts, developer TV plant selection and the daily all-plant clock-out.
