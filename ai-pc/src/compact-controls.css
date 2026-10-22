@@ -7,9 +7,8 @@
 .review-page-select{display:flex;gap:8px;padding:14px 20px;align-items:center;font-size:13px}
 .bulk-review-confirm{flex-basis:100%;display:grid;gap:10px;border-top:1px solid #e1e5eb;padding-top:12px}.bulk-review-confirm input{max-width:650px}
 .attention-issue{padding:14px 18px;gap:14px}.attention-reasons{gap:6px;font-size:12px}.attention-person>input{float:left;margin-right:8px}
-.board-plant-select{display:grid;gap:3px;font-size:11px}.board-plant-select select{width:auto;max-width:200px;min-height:36px}
+.board-plant-select{display:grid;gap:5px;font-size:11px;color:#d5d5da}.board-plant-select select{width:auto;max-width:200px;min-height:36px;color-scheme:dark;background-color:#26262b;border-color:#ffffff30;color:#f4f4f5;border-radius:7px;cursor:pointer}.board-plant-select select:hover{background-color:#323238;border-color:#ffffff60}.board-plant-select select:focus-visible{outline:2px solid #c6becf;outline-offset:3px;box-shadow:none}.board-plant-select option{background:#26262b;color:#f4f4f5}
 .compact-controls{margin-bottom:12px}.compact-controls label{max-width:400px}.employee-import{margin-bottom:14px}.employee-import:not([open]){padding:0}
-.board-team-strip.team-c,.board-team-strip.team-d{background:#4b5563}
 @media(max-width:650px){.directory-group-select{display:grid}.directory-group-select select{width:100%}.review-toolbar>*{max-width:100%}.board-plant-select select{max-width:150px}}
 
 @media(max-width:650px){.attention-categories{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.attention-categories button{flex-direction:column;padding:10px 4px;gap:3px;text-align:center}.attention-categories button svg{display:none}.attention-categories strong{font-size:20px}.attention-categories span{flex:initial}.attention-centre{gap:12px}}

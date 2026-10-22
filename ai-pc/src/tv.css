@@ -31,9 +31,11 @@
 .board-group-teams { flex: 1; min-width: 0; border-left: 1px solid #e1e6ed; }
 .board-team-row { display: flex; align-items: stretch; border-bottom: 1px dashed #dce3ec; }
 .board-team-row:last-child { border-bottom: 0; }
-.board-team-strip { margin: 0; width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #68778d; color: white; font-size: 12px; line-height: 1; }
-.board-team-strip.team-a { background: #0a9671; }
-.board-team-strip.team-b { background: #326ee0; }
+.board-team-strip { margin: 0; width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #707075; color: white; font-size: 12px; line-height: 1; }
+.board-team-strip.team-a { background: #38383d; }
+.board-team-strip.team-b { background: #74685e; }
+.board-team-strip.team-c { background: #5e526b; }
+.board-team-strip.team-d { background: #836472; }
 .board-group .tv-department-people { padding: 6px; }
 .fit-all .board-group .tv-department-title { width: 116px; padding: 7px 10px; }
 .fit-all .board-group .tv-department-people { padding: 5px; grid-auto-rows: 34px; gap: 5px; }
@@ -49,8 +51,8 @@
 /* Render cards at real pixel sizes. Scaling the entire board softens text/photos. */
 .redesigned-board .board-stage{transform:none!important;width:100%;transform-origin:initial}
 .redesigned-board .board-group{padding:0;margin:0;gap:0}
-.large-photo-board .board-stage{--board-card-width:190px;--board-card-height:68px;--board-photo-size:44px;--board-name-size:14px;--board-position-size:11px;--board-card-gap:8px;--board-grid-padding:8px}
-.native-overview-board .board-stage{--board-card-width:112px;--board-card-height:34px;--board-photo-size:24px;--board-name-size:10px;--board-position-size:8px;--board-card-gap:4px;--board-grid-padding:5px}
+.large-photo-board .board-stage{--board-card-width:204px;--board-card-height:72px;--board-photo-size:48px;--board-name-size:14px;--board-position-size:11px;--board-card-gap:8px;--board-grid-padding:8px}
+.native-overview-board .board-stage{--board-card-width:120px;--board-card-height:36px;--board-photo-size:24px;--board-name-size:10px;--board-position-size:8px;--board-card-gap:4px;--board-grid-padding:5px}
 .redesigned-board .board-group .tv-department-people{grid-template-columns:repeat(auto-fill,var(--board-card-width));grid-auto-rows:var(--board-card-height);gap:var(--board-card-gap);padding:var(--board-grid-padding)}
 .redesigned-board .board-group .tv-employee{height:var(--board-card-height);min-height:var(--board-card-height);max-height:var(--board-card-height);padding:6px;gap:8px}
 .redesigned-board .board-group .tv-employee>.staff-photo{display:grid;width:var(--board-photo-size);height:var(--board-photo-size);flex:0 0 var(--board-photo-size);font-size:12px;border-radius:7px}
@@ -59,7 +61,8 @@
 .redesigned-board .board-group .tv-employee>span:last-of-type{font-size:var(--board-position-size);font-weight:750}
 .redesigned-board.native-overview-board .board-group .tv-employee{padding:2px 4px;gap:4px}
 .redesigned-board.native-overview-board .board-group .tv-employee strong,.redesigned-board.native-overview-board .board-group .tv-employee small{line-height:1.05}
-.redesigned-board.large-photo-board .board-group .tv-department-title{width:132px;padding:8px;min-height:76px}
+.redesigned-board .board-group .tv-department-title{width:92px;padding:6px}
+.redesigned-board.large-photo-board .board-group .tv-department-title{width:108px;padding:8px;min-height:76px}
 .redesigned-board.large-photo-board .tv-department-title h3{font-size:13px;line-height:1.45}
 .redesigned-board.large-photo-board .tv-department-title small{font-size:11px}
 .redesigned-board.large-photo-board .tv-employee i{font-size:8px;padding:1px 4px}
@@ -67,4 +70,4 @@
 .redesigned-board .tv-fit-footer{align-items:center;flex-wrap:wrap;min-height:38px;gap:8px;font-size:11px}
 .board-page-controls{display:flex;align-items:center;gap:9px}.board-page-controls button{padding:6px 10px;border-radius:5px;background:white;border:1px solid #dce1e8;font-size:11px;color:#343e4b}.board-page-controls button:disabled{opacity:.4}.board-page-controls span{white-space:nowrap;font-size:11px}.redesigned-board .tv-fit-footer>span{font-size:10px}
 .redesigned-board .board-totals{gap:12px}.redesigned-board.tv-mode .board-header{animation:none;background-size:100% 100%}.redesigned-board.tv-mode .board-header::after{animation:none}
-@media(max-width:650px){.redesigned-board.large-photo-board .board-group .tv-department-title{width:100px}.large-photo-board .board-stage{--board-card-width:190px}.clock-admin .clock-person .clock-face{width:52px;height:52px}}
+@media(max-width:650px){.clock-admin .clock-person .clock-face{width:52px;height:52px}}

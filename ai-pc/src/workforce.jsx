@@ -42,9 +42,10 @@ function boardGroupOrder(a,b){
 }
 function BoardRow({name,workers,onDetails,settings}){
   const office=workers[0]?.department==='OFFICE';
+  const label=productionSection(workers[0])?(workers[0].line?.trim()||'Line unassigned'):(workers[0]?.department||'Department unassigned');
   const teams=office ? [['',workers]] : Object.entries(workers.reduce((out,e)=>{(out[e.team||'Unassigned']||=[]).push(e);return out},{})).sort(([a],[b])=>a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b));
   return <section className="tv-department board-group" aria-label={name}>
-    <div className="tv-department-title"><h3>{name}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small></div>
+    <div className="tv-department-title" title={name}><h3>{label}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small></div>
     <div className="board-group-teams">{teams.map(([team,members])=><section className={'board-team-row '+(office?'office-row':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
       {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}>{team==='Unassigned'?'—':team}</h4>}
       <div className="tv-department-people">{sortPeople(members,'saved',settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}</div>
@@ -103,7 +104,7 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
       setDimensions(previous=>previous.width===width&&previous.height===height?previous:{width,height});
       if(!stage.current)return;
       if(mode!=='all'||!fit){stage.current.removeAttribute('style');return;}
-      const values={'--board-card-height':'34px','--board-card-width':'112px','--board-photo-size':'21px','--board-name-size':'9px','--board-position-size':'7px'};
+      const values={'--board-card-height':'36px','--board-card-width':'120px','--board-photo-size':'24px','--board-name-size':'10px','--board-position-size':'8px'};
       Object.entries(values).forEach(([key,value])=>stage.current.style.setProperty(key,value));
       let low=.05,high=1;
       for(let i=0;i<14;i++){const candidate=(low+high)/2;stage.current.style.width=(width/candidate)+'px';if(stage.current.scrollHeight*candidate<=height)low=candidate;else high=candidate;}
