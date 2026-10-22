@@ -48,7 +48,7 @@ function BoardRow({name,workers,onDetails,settings}){
     <div className="tv-department-title" title={name}><h3>{label}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small></div>
     <div className="board-group-teams">{teams.map(([team,members])=><section className={'board-team-row '+(office?'office-row':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
       {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}>{team==='Unassigned'?'—':team}</h4>}
-      <div className="tv-department-people">{sortPeople(members,'saved',settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}</div>
+      <div className="tv-department-people">{sortPeople(members,'position',settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}</div>
     </section>)}</div>
   </section>;
 }
@@ -93,7 +93,7 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
   function changePlant(value){setBoardPlant(value);setPage(0);try{localStorage.setItem('attendance-board-plant',value)}catch{}}
   const root=useRef(null),stage=useRef(null),windowRef=useRef(null);
   const people=useMemo(()=>visibleEmployees.filter(e=>(!onlyIn||e.status==='IN')&&(!query||[e.name,e.nickname,e.id,e.department,e.line,e.position,e.office_department,productionSection(e)].some(s=>s?.toLowerCase().includes(query.toLowerCase())))),[employees,chosen,onlyIn,query]);
-  const groups=useMemo(()=>Object.entries(people.reduce((out,e)=>{(out[boardGroupName(e)]||=[]).push(e);return out},{})).sort(([a],[b])=>boardGroupOrder(a,b)).map(([name,workers])=>[name,sortPeople(workers,'saved',settings).sort((a,b)=>name==='OFFICE'?0:(a.team||'').localeCompare(b.team||''))]),[people,settings.employee_sort,settings.employee_order]);
+  const groups=useMemo(()=>Object.entries(people.reduce((out,e)=>{(out[boardGroupName(e)]||=[]).push(e);return out},{})).sort(([a],[b])=>boardGroupOrder(a,b)).map(([name,workers])=>[name,sortPeople(workers,'position').sort((a,b)=>workers[0]?.department==='OFFICE'?0:(a.team||'').localeCompare(b.team||''))]),[people]);
   const pages=useMemo(()=>paginateBoard(groups,dimensions),[groups,dimensions]);
   const currentPage=Math.min(page,pages.length-1),shown=fit&&mode==='large'?pages[currentPage]:groups;
   const shownCount=shown.reduce((sum,[,workers])=>sum+workers.length,0);

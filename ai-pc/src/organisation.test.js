@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {POSITIONS,productionSection,scheduleScopes,sortEmployees,employeeGroup} from './organisation.js';
+import {POSITIONS,POSITION_HIERARCHY,positionRank,productionSection,scheduleScopes,sortEmployees,employeeGroup} from './organisation.js';
 import {employeeHours} from './team-hours.js';
 
 test('production sections derive from lines, allow explicit reassignment, and exclude Office',()=>{
@@ -21,6 +21,14 @@ test('manual order is deterministic, retains new employees, and leaves saved inp
   assert.deepEqual(sortEmployees(employees,'manual',order).map(e=>e.id),['3','1','2','4']);
   assert.deepEqual(order,['3','1']);
   assert.deepEqual(sortEmployees(employees,'name',order).map(e=>e.id),['2','3','4','1']);
+});
+test('imported job titles sort by seniority rather than falling back to alphabetical order',()=>{
+  const positions=['DIRECTOR, OPERATIONS','TECHNICAL DIRECTOR','GM, MANUFACTURING','SR MANAGER, HR','MGR, PRODUCTION','AM, HR & ADMIN','SR. EXEC, ERP','EXEC, BD','JR EXE, LOGISTIC','SR. SPR, MAIN','SPR, PROD','ACTING SUPERVISOR, MAINT','SR LEADER, PROD','TL, PROD','LEADER, PROD','TECHNICAL OFFICIER','TECHNICAL ASSISTANT, QM','SR. TECHNICIAN, MAINT','TECH, MAINT','SR OPERATOR, LOGISTIC','OPR, PROD','SR QC INSPECTOR','QC INSPECTOR','MOULD MAKER','SR. ASST, PROD','Assist, QM','TRAINEE'];
+  const employees=positions.map((position,i)=>({id:String(i),name:String(i).padStart(2,'0'),position}));
+  assert.deepEqual(sortEmployees([...employees].reverse(),'position').map(e=>e.position),positions);
+  for(const position of positions)assert.ok(positionRank(position)<POSITION_HIERARCHY.length,position);
+  assert.equal(positionRank('OPR - TECHNICAL'),positionRank('OPERATOR'));
+  assert.equal(positionRank('Unknown role'),POSITION_HIERARCHY.length);
 });
 const state={settings:{team_schedules:{A:'normal'},schedule_groups:{
   'section:CONVERSION':{team_schedules:{A:'day',B:'night'},team_overtime:{A:true,B:false},rotation:{anchor_date:'2026-10-01',interval_days:7,schedule_ids:['day','night']}},
