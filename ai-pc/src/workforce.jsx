@@ -1,7 +1,7 @@
 import {filterBoardPlant} from './plant-view.js';
 import {employeeLocation} from './transfer-utils.js';
 import {syncLabel} from './employee-sync.js';
-import {paginateBoard,isOfficeGroup,teamColumnWeight} from './board-layout.js';
+import {paginateBoard,isOfficeGroup,teamColumnWeight,boardTeams,orderBoardGroups} from './board-layout.js';
 import {productionSection,sortEmployees,employeeGroup} from './organisation.js';
 import React,{useState,useMemo,useRef,useLayoutEffect,useEffect} from 'react';
 import {Users,Pencil,Clock3,Search,Monitor,Minimize2,Maximize2,ArrowUpDown,ChevronDown} from 'lucide-react';
@@ -43,12 +43,14 @@ function boardGroupOrder(a,b){
 function BoardRow({name,workers,onDetails,settings}){
   const office=isOfficeGroup(name,workers);
   const label=productionSection(workers[0])?(workers[0].line?.trim()||'Line unassigned'):(workers[0]?.department||'Department unassigned');
-  const teams=office ? [['',workers]] : Object.entries(workers.reduce((out,e)=>{(out[e.team||'Unassigned']||=[]).push(e);return out},{})).sort(([a],[b])=>a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b));
-  return <section className={'tv-department board-group '+(office?'office-group':'shift-group')} aria-label={name}>
-    <div className="tv-department-title" title={name}><h3>{label}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small></div>
-    <div className="board-group-teams" style={office?undefined:{gridTemplateColumns:teams.map(([,members])=>`minmax(0, ${teamColumnWeight(members.length)}fr)`).join(' ')}}>{teams.map(([team,members])=><section className={'board-team-row '+(office?'office-row':'shift-team-'+team.toLowerCase())} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
-      {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}><span>{team==='Unassigned'?'Unassigned':'Team '+team}</span><small>{members.filter(e=>e.status==='IN').length} / {members.length}</small></h4>}
-      <div className="tv-department-people">{sortPeople(members,'position',settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}</div>
+  const teams=office?[['',workers]]:boardTeams(workers);
+  const emptyNormal=!office&&teams.length>1&&!teams.find(([team])=>team==='N')?.[1].length;
+  const beforeNormal=teams.findIndex(([team])=>team==='N')-1;
+  return <section className={'tv-department board-group '+(office?'office-group':'shift-group')+(teams.length===1?' single-team':'')} aria-label={name}>
+    <div className="tv-department-title" title={name}><h3>{label}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small>{!office&&teams.length===1&&<span className="board-solo-team">{teams[0][0]==='N'?'Normal hours':teams[0][0]}</span>}</div>
+    <div className="board-group-teams" style={office?undefined:{gridTemplateColumns:teams.map(([team])=>`minmax(0, ${(teams.length===1?1:teamColumnWeight(team))}fr)`).join(' ')}}>{teams.map(([team,members],index)=>emptyNormal&&team==='N'?null:<section style={emptyNormal&&index===beforeNormal?{gridColumn:`${index+1} / span 2`}:undefined} className={'board-team-row '+(office?'office-row':'shift-team-'+team.toLowerCase())+(!members.length?' empty-shift':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
+      {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}><span>{team==='Unassigned'?'Unassigned':'Team '+team}</span><small>{members.length?members.filter(e=>e.status==='IN').length+' / '+members.length:'—'}</small></h4>}
+      <div className="tv-department-people">{sortPeople(members,'position',settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}{!members.length&&<span className="board-empty-team">—</span>}</div>
     </section>)}</div>
   </section>;
 }
@@ -93,7 +95,11 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
   function changePlant(value){setBoardPlant(value);setPage(0);try{localStorage.setItem('attendance-board-plant',value)}catch{}}
   const root=useRef(null),stage=useRef(null),windowRef=useRef(null);
   const people=useMemo(()=>visibleEmployees.filter(e=>(!onlyIn||e.status==='IN')&&(!query||[e.name,e.nickname,e.id,e.department,e.line,e.position,e.office_department,productionSection(e)].some(s=>s?.toLowerCase().includes(query.toLowerCase())))),[employees,chosen,onlyIn,query]);
-  const groups=useMemo(()=>Object.entries(people.reduce((out,e)=>{(out[boardGroupName(e)]||=[]).push(e);return out},{})).sort(([a],[b])=>boardGroupOrder(a,b)).map(([name,workers])=>[name,sortPeople(workers,'position').sort((a,b)=>workers[0]?.department==='OFFICE'?0:(a.team||'').localeCompare(b.team||''))]),[people]);
+  const groups=useMemo(()=>{
+    const collect=rows=>Object.entries(rows.reduce((out,e)=>{(out[boardGroupName(e)]||=[]).push(e);return out},{}));
+    const grouped=collect(people).sort(([a],[b])=>boardGroupOrder(a,b));
+    return orderBoardGroups(grouped,collect(visibleEmployees)).map(([name,workers])=>[name,sortPeople(workers,'position').sort((a,b)=>isOfficeGroup(name,workers)?0:(a.team||'').localeCompare(b.team||''))]);
+  },[people,employees,chosen]);
   const pages=useMemo(()=>paginateBoard(groups,dimensions),[groups,dimensions]);
   const currentPage=Math.min(page,pages.length-1),shown=fit&&mode==='large'?pages[currentPage]:groups;
   const shownCount=shown.reduce((sum,[,workers])=>sum+workers.length,0);
@@ -104,7 +110,7 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
       setDimensions(previous=>previous.width===width&&previous.height===height?previous:{width,height});
       if(!stage.current)return;
       if(mode!=='all'||!fit){stage.current.removeAttribute('style');return;}
-      const values={'--board-card-height':'36px','--board-card-width':'120px','--board-photo-size':'24px','--board-name-size':'10px','--board-position-size':'8px'};
+      const values={'--board-card-height':'38px','--board-card-width':'146px','--board-photo-size':'26px','--board-name-size':'11px','--board-position-size':'8px'};
       Object.entries(values).forEach(([key,value])=>stage.current.style.setProperty(key,value));
       let low=.05,high=1;
       for(let i=0;i<14;i++){const candidate=(low+high)/2;stage.current.style.width=(width/candidate)+'px';if(stage.current.scrollHeight*candidate<=height)low=candidate;else high=candidate;}

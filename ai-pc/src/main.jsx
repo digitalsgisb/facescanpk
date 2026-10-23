@@ -17,6 +17,7 @@ import {ClockControls} from './clock-controls.jsx';
 import {EmployeeDetails} from './employee-details.jsx';
 import {useAttendanceNotifications, AttendanceNotifications, AttendanceSound} from './attendance-notifications.jsx';
 import './black-theme.css';
+import './board-refinement.css';
 import './sidebar.css';
 import {AttentionCentre} from './attention.jsx';
 import {issueLogDates,sessionIssues} from './attention.js';
