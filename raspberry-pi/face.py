@@ -206,6 +206,7 @@ class SmartAttendanceSystem:
 
     def health_loop(self):
         if self.transport:
+            self.transport.face_employee_ids = list(self.known_ids)
             self.transport.camera_health = self.camera_state
             self.transport.ai_health = self.ai_state
         network = getattr(self, 'network_state', 'Connecting')

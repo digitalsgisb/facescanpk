@@ -8,7 +8,7 @@ BASE = Path(__file__).resolve().parents[1]
 PI_FILES = ['README.md', 'face.py', 'kiosk_config.py', 'kiosk_keyboard.py', 'kiosk_touch.py', 'kiosk_instance.py', 'test_kiosk_instance.py', 'kiosk_transport.py',
             'kiosk_vision.py', 'configure_kiosk.py', 'configure_display.py', 'test_configure_display.py', 'run_kiosk.sh', 'kiosk.env.example',
             'test_kiosk_transport.py', 'test_kiosk_keyboard.py', 'test_kiosk_controls.py', 'test_kiosk_vision.py', '1.png']
-PC_FILES = ['README.md', 'EMPLOYEE-ADMIN.md', 'PLANT-ROLLOUT.md', 'REVIEW-SHIFTS.md', 'server.py', 'employee_admin.py', 'testing_operations.py', 'plant_workflows.py', 'test_plant_workflows.py', 'test_testing_operations.py', 'test_employee_admin.py', 'requirements.txt', 'start.ps1', 'package.json',
+PC_FILES = ['README.md', 'EMPLOYEE-ADMIN.md', 'PLANT-ROLLOUT.md', 'REVIEW-SHIFTS.md', 'server.py', 'attendance_maintenance.py', 'test_attendance_maintenance.py', 'employee_admin.py', 'testing_operations.py', 'plant_workflows.py', 'test_plant_workflows.py', 'test_testing_operations.py', 'test_employee_admin.py', 'requirements.txt', 'start.ps1', 'package.json',
             'package-lock.json', 'index.html', 'vite.config.js', 'test_server.py', 'import_history.py',
             'data/employees.example.json', 'Dockerfile', '.dockerignore', 'compose.yaml', '.env.example',
             'manage.py', 'test_manage.py', 'install-docker-ubuntu.sh', 'DOCKER-SSH.md']

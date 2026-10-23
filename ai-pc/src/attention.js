@@ -4,7 +4,10 @@ const issues={
   outside_scheduled_hours:['Outside working hours','The clock action fell outside the allowed shift window.'],
   late_arrival:['Late arrival','The employee clocked in after the late-arrival grace period.'],
   early_departure:['Early departure','The employee clocked out before the allowed departure time.'],
-  stale_open_session:['Clock-out needs checking','An earlier clock-in is still open beyond the review threshold.'],
+  stale_open_session:['Clock-out needs checking','An earlier attendance session exceeded the review threshold. Review it separately; new clock actions can continue.'],
+  missing_clock_out:['Missing clock-out','No departure scan was received for this old session. Current attendance can continue.'],
+  estimated_clock_out:['Estimated clock-out','The scheduled end (or review threshold when hours are missing) was used to release an old session. Confirm the actual departure later.'],
+  automatic_clock_out:['Automatic clock-out','The system applied the Normal-shift cutoff. New attendance can continue while this record awaits review.'],
   out_of_order_scan:['Older scan received','This scan arrived before an attendance event that was already saved.'],
 };
 export function issueDetails(flags){return [...new Set(Array.isArray(flags)?flags:[])].map(code=>({code,title:issues[code]?.[0]||code.replaceAll('_',' '),detail:issues[code]?.[1]||'Review this attendance flag and record your decision.'}))}

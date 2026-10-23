@@ -1,5 +1,6 @@
 """Company-network attendance service. Run on the AI PC; no cloud dependency."""
 import argparse
+import attendance_maintenance
 import base64
 import hashlib
 import hmac
@@ -182,7 +183,7 @@ class Store:
                 db.execute('INSERT OR IGNORE INTO schedules VALUES(?,?,?,?,?)', s)
             for key, value in {'cooldown_seconds':300, 'early_in_minutes':120, 'late_in_minutes':120,
                                'early_out_minutes':120, 'late_out_minutes':120,
-                               'max_open_hours':20, 'late_grace_minutes':15,
+                               'normal_auto_out_enabled':1, 'normal_auto_out_hour':3, 'max_open_hours':20, 'late_grace_minutes':15,
                                'early_departure_grace_minutes':15, 'rotation':None,
                                'team_schedules':{}, 'team_overtime':{}, 'schedule_groups':{},
                                'employee_sort':'position', 'employee_order':[]}.items():
@@ -335,7 +336,7 @@ class Store:
             e['status'] = 'IN' if e['session'] else 'OUT'
             e['stale_session'] = bool(e['session'] and (datetime.now(KL)-stamp(e['session']['time_in'])).total_seconds()>self.settings(db)['max_open_hours']*3600)
             result.append(e)
-        return result
+        return attendance_maintenance.decorate_enrollment(db, result)
 
     def scan(self, data, device, dashboard=False, skip_unchanged=False):
         event_id = data.get('event_id', '')
@@ -362,6 +363,16 @@ class Store:
             if not e or not e['active']:
                 raise Problem('Employee is unknown or archived.', 422)
             opened = db.execute('SELECT * FROM sessions WHERE employee_id=? AND time_out IS NULL', (eid,)).fetchone()
+            cfg = self.settings(db)
+            latest = db.execute("SELECT * FROM events WHERE employee_id=? AND json_extract(result,'$.action') IN ('IN','OUT','DUPLICATE') ORDER BY occurred_at DESC LIMIT 1", (eid,)).fetchone()
+            # Review flags do not lock current attendance. Release only a stale
+            # session on an in-order new scan; an explicit OUT still records departure.
+            stale = bool(opened and (occurred-stamp(opened['time_in'])).total_seconds()>cfg['max_open_hours']*3600)
+            in_order = not latest or occurred >= stamp(latest['occurred_at'])
+            outside_cooldown = dashboard or not latest or (occurred-stamp(latest['occurred_at'])).total_seconds() >= cfg['cooldown_seconds']
+            if stale and in_order and outside_cooldown and (not dashboard or data['action']=='IN'):
+                attendance_maintenance.release_stale_session(self,db,opened,occurred,cfg)
+                opened = None
             if dashboard and data['action'] != ('OUT' if opened else 'IN'):
                 if skip_unchanged:
                     result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'UNCHANGED',
@@ -372,20 +383,17 @@ class Store:
                     self.audit(db,'admin','clock_unchanged',eid,None,result)
                     return result
                 raise Problem('Attendance already changed. Refresh and check the current status.', 409)
-            cfg = self.settings(db)
-            latest = db.execute("SELECT * FROM events WHERE employee_id=? AND json_extract(result,'$.action')!='UNCHANGED' ORDER BY occurred_at DESC LIMIT 1", (eid,)).fetchone()
             flags = []
-            if latest and occurred < stamp(latest['occurred_at']):
+            if (latest and occurred < stamp(latest['occurred_at'])) or (opened and occurred < stamp(opened['time_in'])):
                 result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'REVIEW',
                           'flags':['out_of_order_scan'], 'message':'Scan stored for review; current attendance was not changed.'}
             elif not dashboard and latest and (occurred-stamp(latest['occurred_at'])).total_seconds() < cfg['cooldown_seconds']:
                 result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'DUPLICATE',
                           'flags':[], 'message':'Already recorded recently; attendance unchanged.'}
             else:
-                if opened and (occurred-stamp(opened['time_in'])).total_seconds()>cfg['max_open_hours']*3600:
-                    result = {'event_id':event_id,'employee_id':eid,'accepted':True,'action':'REVIEW',
-                              'flags':['stale_open_session'],'message':'Scan stored for review. An earlier session needs correction.'}
-                elif opened:
+                if opened:
+                    if stale:
+                        flags.append('stale_open_session')
                     if opened['planned_out']:
                         diff = (occurred-stamp(opened['planned_out'])).total_seconds()/60
                         if diff < -cfg['early_out_minutes'] or diff > cfg['late_out_minutes']:
@@ -592,6 +600,7 @@ class Handler(BaseHTTPRequestHandler):
                     if scope != 'kiosk':
                         raise Problem('Kiosk token required.',403)
                     data = self.body()
+                    attendance_maintenance.validate_enrollment(data, Problem)
                     metadata_version = data.get('metadata_version')
                     if metadata_version is not None:
                         if not isinstance(metadata_version,str) or not re.fullmatch(r'[a-f0-9]{64}',metadata_version):
@@ -1056,6 +1065,9 @@ class Handler(BaseHTTPRequestHandler):
                     known={row['id'] for row in db.execute('SELECT id FROM employees')}
                     if any(eid not in known for eid in value):
                         raise Problem('Employee order includes an unknown employee.')
+                elif key in ('normal_auto_out_enabled','normal_auto_out_hour'):
+                    if type(value) is not int or not 0<=value<=(1 if key=='normal_auto_out_enabled' else 23):
+                        raise Problem('Choose on/off and a cutoff hour from 0 to 23.')
                 elif not isinstance(value,int) or not 0<=value<=1440 or (key=='max_open_hours' and not 1<=value<=48):
                     raise Problem('Invalid timing setting.')
                 db.execute('UPDATE settings SET value=? WHERE key=?',(json.dumps(value),key))
@@ -1253,6 +1265,7 @@ if __name__=='__main__':
         server.socket=context.wrap_socket(server.socket,server_side=True)
         server.is_tls=True
     clockout_stop,clockout_thread=plant_workflows.start_clockout_worker(server.store)
+    normal_stop,normal_thread=attendance_maintenance.start_worker(server.store)
     backup_stop=threading.Event()
     def daily_backup():
         while not backup_stop.is_set():
@@ -1270,5 +1283,6 @@ if __name__=='__main__':
         server.serve_forever()
     except KeyboardInterrupt:
         backup_stop.set()
+        normal_stop.set()
         clockout_stop.set()
         server.server_close()

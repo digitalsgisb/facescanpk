@@ -9,7 +9,7 @@ import tempfile
 import uuid
 import zipfile
 
-FILES={'server.py','employee_admin.py','testing_operations.py','plant_workflows.py','test_plant_workflows.py','manage.py','import_history.py',
+FILES={'server.py','attendance_maintenance.py','test_attendance_maintenance.py','employee_admin.py','testing_operations.py','plant_workflows.py','test_plant_workflows.py','manage.py','import_history.py',
        'test_server.py','test_manage.py','test_employee_admin.py','test_testing_operations.py',
        'requirements.txt','package.json','package-lock.json','index.html','vite.config.js',
        'Dockerfile','.dockerignore','README.md','EMPLOYEE-ADMIN.md','PLANT-ROLLOUT.md','REVIEW-SHIFTS.md','compose.new-plant.example.yaml','data/employees.example.json'}

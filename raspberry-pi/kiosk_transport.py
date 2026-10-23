@@ -42,6 +42,7 @@ class ReliableTransport:
         self.cooldown_seconds = 300
         self.camera_health = 'starting'
         self.ai_health = 'starting'
+        self.face_employee_ids = None
         self.headers = {'Authorization':'Bearer '+token}
         db = self.connect()
         try:
@@ -156,6 +157,7 @@ class ReliableTransport:
                     finally:
                         health_db.close()
                     self.request('/api/heartbeat',{'camera':self.camera_health,'ai':self.ai_health,
+                                                  **({'face_employee_ids':list(self.face_employee_ids)} if self.face_employee_ids is not None else {}),
                                                   'pending_scans':self.pending(),'rejected_scans':rejected,
                                                   **acknowledgement}).raise_for_status()
                     next_health=time.monotonic()+20

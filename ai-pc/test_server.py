@@ -94,11 +94,17 @@ class AttendanceTests(unittest.TestCase):
         with self.store.connect() as db:
             self.assertIsNone(db.execute('SELECT time_out FROM sessions').fetchone()[0])
 
-    def test_stale_session_is_not_silently_closed(self):
-        self.scan('A','2026-10-10T08:00:00+08:00')
+    def test_stale_session_is_separate_from_new_clock_in(self):
+        old=self.scan('A','2026-10-10T08:00:00+08:00')
         result=self.scan('A','2026-10-11T08:00:00+08:00')
-        self.assertEqual(result['action'],'REVIEW')
-        self.assertIn('stale_open_session',result['flags'])
+        self.assertEqual(result['action'],'IN')
+        self.assertNotEqual(old['session_id'],result['session_id'])
+        with self.store.connect() as db:
+            previous=db.execute('SELECT * FROM sessions WHERE id=?',(old['session_id'],)).fetchone()
+            self.assertEqual(previous['time_out'],'2026-10-10T16:15:00+08:00')
+            self.assertIn('estimated_clock_out',json.loads(previous['flags']))
+            self.assertIn('missing_clock_out',json.loads(previous['flags']))
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM sessions WHERE time_out IS NULL').fetchone()[0],1)
 
     def test_rotation_and_individual_override(self):
         with self.store.connect() as db:
