@@ -1,2 +1,2 @@
 ad439d9ff07a671038ef12edbf97a0ecab9d175c719ddb25d0a0f75256a447d6  Smart-Attendance-Pi.zip
-c897e6f1472abda6085e5b966dd09f75f39cc9a633916796efc2e5a25b0bc998  Smart-Attendance-AI-PC.zip
+ce427ba2a45c188f72803e4b60833a633d95b38753081273d404c6a8461a83ad  Smart-Attendance-AI-PC.zip

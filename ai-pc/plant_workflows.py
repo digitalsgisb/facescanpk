@@ -72,7 +72,7 @@ def save_board_layout(store,db,base,data,actor,Problem):
     old=board_layout(db,base)
     if data.get('version')!=old['version']:raise Problem('Layout changed on another display. Cancel to load the latest layout.',409)
     config=data.get('layout')
-    allowed={'enabled','columns','gap','cardWidth','cardHeight','photoSize','fontSize','sort','groups','order'}
+    allowed={'enabled','columns','gap','cardWidth','cardHeight','photoSize','fontSize','sort','groups','order','cards','cardOrder'}
     if not isinstance(config,dict) or set(config)-allowed:raise Problem('Invalid board layout.')
     if type(config.get('enabled')) is not bool:raise Problem('Choose whether the custom grid is enabled.')
     for key,low,high in [('columns',1,12),('gap',0,32),('cardWidth',120,360),('cardHeight',52,160),('photoSize',24,100),('fontSize',10,24)]:
@@ -85,6 +85,15 @@ def save_board_layout(store,db,base,data,actor,Problem):
     for name,group in groups.items():
         if not isinstance(name,str) or len(name)>240 or not isinstance(group,dict) or set(group)-{'span','height','hidden'}:raise Problem('Invalid layout group.')
         if type(group.get('span')) is not int or not 1<=group['span']<=config['columns'] or type(group.get('height')) is not int or not 0<=group['height']<=1600 or type(group.get('hidden')) is not bool:raise Problem('Invalid group size or visibility.')
+    cards=config.get('cards',{});card_order=config.get('cardOrder',[])
+    if not isinstance(cards,dict) or len(cards)>10000:raise Problem('Invalid individual card sizes.')
+    for eid,size in cards.items():
+        if not isinstance(eid,str) or len(eid)>80 or not isinstance(size,dict) or set(size)!={'width','height'}:raise Problem('Invalid employee card.')
+        if type(size['width']) is not int or not 120<=size['width']<=480 or type(size['height']) is not int or not 52<=size['height']<=240:raise Problem('Invalid employee card size.')
+    if not isinstance(card_order,list) or len(card_order)>10000 or any(not isinstance(eid,str) or len(eid)>80 for eid in card_order) or len(set(card_order))!=len(card_order):raise Problem('Invalid employee card order.')
+    known={row['id'] for row in db.execute("SELECT id FROM employees WHERE ?='' OR base=?",(base,base))}
+    prior=set(old['layout'].get('cards',{}))|set(old['layout'].get('cardOrder',[]))
+    if (set(cards)|set(card_order))-known-prior:raise Problem('Card layout includes an unknown employee or an employee outside this plant.')
     db.execute('INSERT INTO board_layouts VALUES(?,?) ON CONFLICT(base) DO UPDATE SET config=excluded.config',(base,encoded(config)))
     store.audit(db,actor,'board_layout_updated',base or 'all-plants',old['layout'],config)
     return board_layout(db,base)

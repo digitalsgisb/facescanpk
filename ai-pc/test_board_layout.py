@@ -56,5 +56,25 @@ class BoardLayoutTests(unittest.TestCase):
         self.assertEqual(self.request('/api/board-layout?base=SENDAYAN')[0],403)
         self.assertEqual(self.save(version='wrong')[0],403)
 
+    def test_individual_sizes_and_card_order_are_shared_and_persisted(self):
+        self.setup_people()
+        config={**layout(),'cards':{'SD':{'width':290,'height':102}},'cardOrder':['SD']}
+        self.assertEqual(self.save(config=config)[0],200)
+        self.assertEqual(self.request('/api/state')[1]['board_layouts']['SENDAYAN']['layout'],config)
+        with self.server.store.connect() as db:
+            self.assertEqual(plant_workflows.board_layout(db,'SENDAYAN')['layout'],config)
+        self.site()
+        self.assertEqual(self.request('/api/state')[1]['board_layouts']['SENDAYAN']['layout'],config)
+        for change in [
+            {'cards':{'SD':{'width':True,'height':72}}},
+            {'cards':{'SD':{'width':119,'height':72}}},
+            {'cards':{'SD':{'width':200,'height':241}}},
+            {'cards':{'SD':{'width':200,'height':72,'extra':1}}},
+            {'cards':{'PK':{'width':200,'height':72}}},
+            {'cardOrder':['PK']},{'cardOrder':['unknown']},{'cardOrder':['SD','SD']},
+        ]:
+            self.assertEqual(self.save(config={**config,**change})[0],400,change)
+        self.assertEqual(self.request('/api/board-layout?base=SENDAYAN')[1]['layout'],config)
+
 
 if __name__=='__main__':unittest.main()

@@ -3,8 +3,8 @@ import {employeeLocation} from './transfer-utils.js';
 import {syncLabel} from './employee-sync.js';
 import {paginateBoard,isOfficeGroup,teamColumnWeight,boardTeams,orderBoardGroups} from './board-layout.js';
 import {productionSection,sortEmployees,employeeGroup} from './organisation.js';
-import {normalizeLayout,layoutGroups,moveGroup} from './custom-layout.js';
-import {LayoutEditor,LayoutGroup} from './layout-editor.jsx';
+import {normalizeLayout,layoutGroups,moveGroup,orderCards,moveCardOrder} from './custom-layout.js';
+import {LayoutEditor,LayoutGroup,LayoutCard} from './layout-editor.jsx';
 import React,{useState,useMemo,useRef,useLayoutEffect,useEffect} from 'react';
 import {Users,Pencil,Clock3,Search,Monitor,Minimize2,Maximize2,ArrowUpDown,ChevronDown} from 'lucide-react';
 
@@ -42,17 +42,21 @@ function boardGroupOrder(a,b){
   const section=name=>name==='OFFICE'?0:name==='CONVERSION'||name.startsWith('CONVERSION · ')?1:name==='ROLL MAKING'||name.startsWith('ROLL MAKING · ')?2:3;
   return section(a)-section(b)||rank(a.split(' · ').at(-1))-rank(b.split(' · ').at(-1))||a.localeCompare(b);
 }
-function BoardRow({name,workers,onDetails,settings,sort='position'}){
+function BoardRow({name,workers,onDetails,settings,sort='position',cardLayout,editing=false,onCardSize,onCardMove}){
   const office=isOfficeGroup(name,workers);
   const label=productionSection(workers[0])?(workers[0].line?.trim()||'Line unassigned'):(workers[0]?.department||'Department unassigned');
   const teams=office?[['',workers]]:boardTeams(workers);
   const emptyNormal=!office&&teams.length>1&&!teams.find(([team])=>team==='N')?.[1].length;
   const beforeNormal=teams.findIndex(([team])=>team==='N')-1;
+  const cards=members=>{
+    const sorted=sortPeople(members,sort,settings),arranged=cardLayout?orderCards(sorted,cardLayout.cardOrder):sorted,ids=arranged.map(e=>e.id);
+    return arranged.map(e=>cardLayout?<LayoutCard key={e.id} employee={e} layout={cardLayout} editing={editing} teamIds={ids} onSize={onCardSize} onMove={onCardMove}><BoardEmployee employee={e} onDetails={onDetails}/></LayoutCard>:<BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>);
+  };
   return <section className={'tv-department board-group '+(office?'office-group':'shift-group')+(teams.length===1?' single-team':'')} aria-label={name}>
     <div className="tv-department-title" title={name}><h3>{label}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small>{!office&&teams.length===1&&<span className="board-solo-team">{teams[0][0]==='N'?'Normal hours':teams[0][0]}</span>}</div>
     <div className="board-group-teams" style={office?undefined:{gridTemplateColumns:teams.map(([team])=>`minmax(0, ${(teams.length===1?1:teamColumnWeight(team))}fr)`).join(' ')}}>{teams.map(([team,members],index)=>emptyNormal&&team==='N'?null:<section style={emptyNormal&&index===beforeNormal?{gridColumn:`${index+1} / span 2`}:undefined} className={'board-team-row '+(office?'office-row':'shift-team-'+team.toLowerCase())+(!members.length?' empty-shift':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
       {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}><span>{team==='Unassigned'?'Unassigned':'Team '+team}</span><small>{members.length?members.filter(e=>e.status==='IN').length+' / '+members.length:'—'}</small></h4>}
-      <div className="tv-department-people">{sortPeople(members,sort,settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}{!members.length&&<span className="board-empty-team">—</span>}</div>
+      <div className="tv-department-people">{cards(members)}{!members.length&&<span className="board-empty-team">—</span>}</div>
     </section>)}</div>
   </section>;
 }
@@ -100,6 +104,11 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
   const editing=!!draft;
   useEffect(()=>{setDraft(null);setLayoutError('')},[layoutKey]);
   const updateDraft=value=>setDraft(normalizeLayout(value));
+  const resizeCard=(id,size)=>setDraft(previous=>{
+    const cards={...previous.cards};if(size)cards[id]=size;else delete cards[id];
+    return normalizeLayout({...previous,enabled:true,cards});
+  });
+  const moveCard=(ids,source,target)=>setDraft(previous=>normalizeLayout({...previous,enabled:true,cardOrder:moveCardOrder(previous.cardOrder,ids,source,target)}));
   async function editLayout(){setLayoutBusy(true);setLayoutError('');try{const latest=await api('/board-layout?base='+encodeURIComponent(layoutKey));setDraft(normalizeLayout(latest.layout));setEditVersion(latest.version);setQuery('');setOnlyIn(false)}catch(e){setLayoutError(e.message)}finally{setLayoutBusy(false)}}
   async function saveLayout(){setLayoutBusy(true);setLayoutError('');try{await api('/board-layout','PUT',{base:layoutKey,layout,version:editVersion});await onRefresh();setDraft(null)}catch(e){setLayoutError(e.message)}finally{setLayoutBusy(false)}}
   function changePlant(value){setBoardPlant(value);setPage(0);try{localStorage.setItem('attendance-board-plant',value)}catch{}}
@@ -139,7 +148,7 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
     {editing&&<LayoutEditor layout={layout} fullscreen={fullscreen} onChange={updateDraft} onSave={saveLayout} onCancel={()=>{setDraft(null);setLayoutError('')}} busy={layoutBusy} error={layoutError} conflict={!!saved?.version&&saved.version!==editVersion}/>}
     {custom&&<div className="layout-caption">{editing?'Layout preview': 'Shared layout'} · {shownCount} of {people.length} matching employees{people.length>shownCount?' · Some groups are hidden':''} · Positions shown below names</div>}
     <div className="board-stage-window" ref={windowRef}><div className="board-stage" ref={stage} style={custom?{'--layout-columns':layout.columns,'--layout-gap':layout.gap+'px','--board-card-width':layout.cardWidth+'px','--board-card-height':layout.cardHeight+'px','--board-photo-size':layout.photoSize+'px','--board-name-size':layout.fontSize+'px','--board-position-size':Math.max(9,layout.fontSize-2)+'px','--board-card-gap':'6px','--board-grid-padding':'6px'}:undefined}>{shown.map(([name,workers])=>{
-      const row=<BoardRow name={name} workers={workers} settings={settings} sort={custom?layout.sort:'position'} onDetails={editing?undefined:onDetails}/>;
+      const row=<BoardRow name={name} workers={workers} settings={settings} sort={custom?layout.sort:'position'} onDetails={editing?undefined:onDetails} cardLayout={custom?layout:undefined} editing={editing} onCardSize={resizeCard} onCardMove={moveCard}/>;
       return custom?<LayoutGroup key={name} name={name} config={layout.groups[name]} layout={layout} editing={editing} names={groupNames} onMove={(source,target)=>updateDraft({...layout,order:moveGroup(groupNames,source,target)})} onChange={config=>setDraft(previous=>normalizeLayout({...previous,groups:{...previous.groups,[name]:config}}))}>{row}</LayoutGroup>:<React.Fragment key={name}>{row}</React.Fragment>;
     })}{!shown.length&&<div className="empty">No visible groups. Use Edit layout to show hidden groups, or clear your filters.</div>}</div></div>
     {!custom&&fit&&mode==='large'&&<div className="tv-fit-footer"><strong>{shownCount+' of '+people.length+' employees · Larger photos'}</strong><div className="board-page-controls"><button disabled={pages.length<2} onClick={()=>setPage((currentPage+pages.length-1)%pages.length)} aria-label="Previous TV page">Previous</button><span>Page {currentPage+1} / {pages.length}</span><button disabled={pages.length<2} onClick={()=>setPage((currentPage+1)%pages.length)} aria-label="Next TV page">Next</button><button onClick={()=>setRotating(!rotating)}>{rotating?'Pause rotation':'Resume rotation'}</button></div><span>View only · Click a card for details</span></div>}
