@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
+KIOSK_USER_AGENT = 'SugiharaAttendance-Kiosk/1.0'
+
 
 def load_config(directory, environ=None):
     values = {}

@@ -7,13 +7,14 @@ import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
-from kiosk_config import load_config, validate_config
+from kiosk_config import KIOSK_USER_AGENT, load_config, validate_config
 
 BASE = Path(__file__).resolve().parent
 
 
 def check_connection(url, token):
-    request = urllib.request.Request(url + '/api/employees', headers={'Authorization': 'Bearer ' + token})
+    request = urllib.request.Request(url + '/api/employees', headers={
+        'Authorization': 'Bearer ' + token, 'User-Agent': KIOSK_USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
             data = json.load(response)

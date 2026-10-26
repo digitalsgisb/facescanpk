@@ -2,6 +2,8 @@
 
 This folder goes on the **Raspberry Pi**, not the AI PC. It includes `face.py`, camera/inference workers, touchscreen employee-card registration, durable offline delivery and connection setup.
 
+Connection setup, employee sync, heartbeats and scan delivery identify the application with `User-Agent: SugiharaAttendance-Kiosk/1.0`. This avoids the Cloudflare error 1010 observed with Python's default user agent. Update `kiosk_config.py`, `configure_kiosk.py` and `kiosk_transport.py` together; existing tokens and `kiosk.env` remain valid. The normal `python3 configure_kiosk.py --check` command works without a custom launcher after this update.
+
 ## Step-by-step: connect your existing Pi
 
 These steps use your already-working Raspberry Pi camera/face-recognition environment. Keep using the same Python environment or virtual environment as the old kiosk.

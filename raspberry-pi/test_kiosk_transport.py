@@ -10,11 +10,41 @@ import sys
 sys.path.insert(0,str(Path(__file__).parent.parent/'ai-pc'))
 from server import make_server,digest
 from kiosk_transport import ReliableTransport
-from kiosk_config import load_config, validate_config
+from kiosk_config import KIOSK_USER_AGENT, load_config, validate_config
 from configure_kiosk import check_connection, save_config
 
 TEST_ROOT=Path(__file__).resolve().parent.parent/'ai-pc/runtime/tests'
 TEST_ROOT.mkdir(parents=True,exist_ok=True)
+
+
+class RequestHeaderTests(unittest.TestCase):
+    def test_connection_checker_identifies_kiosk_and_retains_authentication(self):
+        with patch('configure_kiosk.urllib.request.urlopen') as opened:
+            opened.return_value.__enter__.return_value.read.return_value = b'{"employees":[],"connection_scope":"kiosk"}'
+            self.assertEqual(check_connection('https://attendance.example','private-test-token'),0)
+            request=opened.call_args.args[0]
+            self.assertEqual(request.get_header('User-agent'),KIOSK_USER_AGENT)
+            self.assertEqual(request.get_header('Authorization'),'Bearer private-test-token')
+            self.assertEqual(request.full_url,'https://attendance.example/api/employees')
+
+    def test_employee_sync_heartbeat_and_scans_all_identify_the_kiosk(self):
+        with tempfile.TemporaryDirectory(dir=TEST_ROOT) as folder, patch.object(threading.Thread,'start'):
+            transport=ReliableTransport('https://attendance.example','private-test-token',folder,lambda *args:None,lambda *args:None)
+            try:
+                with patch('kiosk_transport.urllib.request.urlopen') as opened:
+                    response=opened.return_value.__enter__.return_value
+                    response.status=200
+                    response.read.return_value=b'{"ok":true}'
+                    for path,payload in [('/api/employees',None),('/api/heartbeat',{'camera':'ready'}),('/api/scans',{'employee_id':'123','event_id':'test-event'})]:
+                        self.assertEqual(transport.request(path,payload).status_code,200)
+                        request=opened.call_args.args[0]
+                        self.assertEqual(request.get_header('User-agent'),KIOSK_USER_AGENT)
+                        self.assertEqual(request.get_header('Authorization'),'Bearer private-test-token')
+                        self.assertEqual(request.full_url,'https://attendance.example'+path)
+                        self.assertEqual(request.get_method(),'POST' if payload is not None else 'GET')
+                        if payload is not None:self.assertEqual(json.loads(request.data),payload)
+            finally:
+                transport.close()
 
 
 class TransportTests(unittest.TestCase):

@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import urllib.request
 import urllib.error
+from kiosk_config import KIOSK_USER_AGENT
 
 KL = timezone(timedelta(hours=8))
 
@@ -43,7 +44,7 @@ class ReliableTransport:
         self.camera_health = 'starting'
         self.ai_health = 'starting'
         self.face_employee_ids = None
-        self.headers = {'Authorization':'Bearer '+token}
+        self.headers = {'Authorization':'Bearer '+token,'User-Agent':KIOSK_USER_AGENT}
         db = self.connect()
         try:
             with db:
