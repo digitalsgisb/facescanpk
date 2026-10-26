@@ -36,6 +36,8 @@ git pull --ff-only origin main
 
 ## Start here: step-by-step instructions
 
+For Sendayan on the shared AI PC, use the [Sendayan Pi connection and shared display layout guide](ai-pc/SENDAYAN-SETUP.md). The Live board supports a saved custom grid per plant: reorder/resize groups, adjust cards and sort employees, then save to every connected display showing that plant. Positions are also visible in compact view.
+
 Choose the instructions for what you are doing:
 
 - **Ubuntu / SSH / Docker AI PC:** use [Docker setup over SSH](ai-pc/DOCKER-SSH.md). A desktop/browser on the AI PC is not required.

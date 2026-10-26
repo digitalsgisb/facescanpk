@@ -558,6 +558,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.plant and scope == 'admin':
                     allowed=(method=='GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/review','/api/clock-access','/api/attention','/api/plant-controls')) or (method in ('POST','DELETE') and route in ('/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/apply','/api/reviews/preview','/api/reviews/bulk')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
                     if route=='/api/plant-controls' and method=='PUT':allowed=True
+                    if route=='/api/board-layout' and method in ('GET','PUT'):allowed=True
                     if not allowed:
                         raise Problem('This account manages its assigned plant only.',403)
                 if self.plant and route.startswith('/api/employees/'):
@@ -627,6 +628,15 @@ class Handler(BaseHTTPRequestHandler):
                         raise Problem('Invalid issue page.')
                     base=plant_workflows.scope(self.plant,query.get('base',[None])[0],Problem)
                     return self.send(self.store.attention_page(db,category,offset,limit,base))
+                if route == '/api/board-layout' and method in ('GET','PUT'):
+                    if scope!='admin':raise Problem('Administrator access required.',403)
+                    data=self.body() if method=='PUT' else {}
+                    base=plant_workflows.scope(self.plant,data.get('base') if method=='PUT' else query.get('base',[None])[0],Problem)
+                    if method=='GET':return self.send(plant_workflows.board_layout(db,base))
+                    db.execute('BEGIN IMMEDIATE')
+                    result=plant_workflows.save_board_layout(self.store,db,base,data,self.actor,Problem)
+                    db.commit();self.store.emit()
+                    return self.send(result)
                 if route == '/api/plant-controls' and method in ('GET','PUT'):
                     if scope!='admin':raise Problem('Administrator access required.',403)
                     data=self.body() if method=='PUT' else {}
@@ -875,6 +885,7 @@ class Handler(BaseHTTPRequestHandler):
                         'assignments':[],'settings':settings,'devices':[],
                         'recent_events':[],'revision':self.store.revision,'time':now_iso()}
         return {'employees':employees,'plant':plant,'review_enabled':plant_workflows.review_enabled(db,plant),'attention_summary':self.store.attention_summary(db,employees,plant),
+                'board_layouts':{base:plant_workflows.board_layout(db,base) for base in ({plant} if plant else {''}|{e.get('base','') for e in employees}|{r['base'] for r in db.execute('SELECT base FROM board_layouts')})},
                 'plant_controls':{base:plant_workflows.controls(self.store,db,base)['settings'] for base in {e.get('base','') for e in employees}},
                 'plant_templates':{base:[plant_workflows.schedule(db,r['id'],base) for r in db.execute('SELECT id FROM schedules')] for base in {e.get('base','') for e in employees}},
                 'schedules':[plant_workflows.schedule(db,r['id'],plant) for r in db.execute('SELECT id FROM schedules')],

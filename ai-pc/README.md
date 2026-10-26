@@ -227,3 +227,7 @@ Employees → Face registration shows Pending registration, Registered and Statu
 ### TV board group order
 
 The board shows Office first, followed by groups containing both rotating shift teams and Normal staff (A/B/N, or C/D/N), rotating-shift groups without Normal staff, and finally Normal-only groups. Each plant stays together in the all-plants view. Group order follows the full employee roster, so searching or showing only clocked-in employees does not move a group into another section. The original bold green/red attendance colours remain in use.
+
+## Shared TV layouts and Sendayan
+
+See [Sendayan setup and shared display layouts](SENDAYAN-SETUP.md) for the complete AI PC update, Pi Git pull/copy/connection steps, plant-scoped kiosk token setup, and Live board layout editor. Save a custom grid for a plant to update all connected displays showing that plant. Positions now remain visible in Compact overview too.

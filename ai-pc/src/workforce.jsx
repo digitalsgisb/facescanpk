@@ -3,6 +3,8 @@ import {employeeLocation} from './transfer-utils.js';
 import {syncLabel} from './employee-sync.js';
 import {paginateBoard,isOfficeGroup,teamColumnWeight,boardTeams,orderBoardGroups} from './board-layout.js';
 import {productionSection,sortEmployees,employeeGroup} from './organisation.js';
+import {normalizeLayout,layoutGroups,moveGroup} from './custom-layout.js';
+import {LayoutEditor,LayoutGroup} from './layout-editor.jsx';
 import React,{useState,useMemo,useRef,useLayoutEffect,useEffect} from 'react';
 import {Users,Pencil,Clock3,Search,Monitor,Minimize2,Maximize2,ArrowUpDown,ChevronDown} from 'lucide-react';
 
@@ -40,7 +42,7 @@ function boardGroupOrder(a,b){
   const section=name=>name==='OFFICE'?0:name==='CONVERSION'||name.startsWith('CONVERSION · ')?1:name==='ROLL MAKING'||name.startsWith('ROLL MAKING · ')?2:3;
   return section(a)-section(b)||rank(a.split(' · ').at(-1))-rank(b.split(' · ').at(-1))||a.localeCompare(b);
 }
-function BoardRow({name,workers,onDetails,settings}){
+function BoardRow({name,workers,onDetails,settings,sort='position'}){
   const office=isOfficeGroup(name,workers);
   const label=productionSection(workers[0])?(workers[0].line?.trim()||'Line unassigned'):(workers[0]?.department||'Department unassigned');
   const teams=office?[['',workers]]:boardTeams(workers);
@@ -50,7 +52,7 @@ function BoardRow({name,workers,onDetails,settings}){
     <div className="tv-department-title" title={name}><h3>{label}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small>{!office&&teams.length===1&&<span className="board-solo-team">{teams[0][0]==='N'?'Normal hours':teams[0][0]}</span>}</div>
     <div className="board-group-teams" style={office?undefined:{gridTemplateColumns:teams.map(([team])=>`minmax(0, ${(teams.length===1?1:teamColumnWeight(team))}fr)`).join(' ')}}>{teams.map(([team,members],index)=>emptyNormal&&team==='N'?null:<section style={emptyNormal&&index===beforeNormal?{gridColumn:`${index+1} / span 2`}:undefined} className={'board-team-row '+(office?'office-row':'shift-team-'+team.toLowerCase())+(!members.length?' empty-shift':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
       {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}><span>{team==='Unassigned'?'Unassigned':'Team '+team}</span><small>{members.length?members.filter(e=>e.status==='IN').length+' / '+members.length:'—'}</small></h4>}
-      <div className="tv-department-people">{sortPeople(members,'position',settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}{!members.length&&<span className="board-empty-team">—</span>}</div>
+      <div className="tv-department-people">{sortPeople(members,sort,settings).map(e=><BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>)}{!members.length&&<span className="board-empty-team">—</span>}</div>
     </section>)}</div>
   </section>;
 }
@@ -86,12 +88,20 @@ export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,setti
   </>;
 }
 
-export function LiveBoard({employees,settings={},live,onDetails,soundControl,onAdminControls,detailsOpen=false,plant=''}){
+export function LiveBoard({employees,settings={},live,onDetails,soundControl,onAdminControls,detailsOpen=false,plant='',api,onRefresh,layouts={}}){
   const [query,setQuery]=useState(''),[onlyIn,setOnlyIn]=useState(false),[fit,setFit]=useState(false),[fullscreen,setFullscreen]=useState(false);
   const [mode,setMode]=useState('large'),[page,setPage]=useState(0),[rotating,setRotating]=useState(true),[dimensions,setDimensions]=useState({width:1200,height:600});
   const [boardPlant,setBoardPlant]=useState(()=>{try{return localStorage.getItem('attendance-board-plant')||'PORT KLANG'}catch{return 'PORT KLANG'}});
   const locations=[...new Set(employees.map(employeeLocation))].sort(),chosen=plant||(boardPlant==='*'||locations.includes(boardPlant)?boardPlant:'*');
   const visibleEmployees=filterBoardPlant(employees,chosen);
+  const layoutKey=chosen==='*'?'':chosen,saved=layouts[layoutKey];
+  const [draft,setDraft]=useState(null),[editVersion,setEditVersion]=useState(''),[layoutBusy,setLayoutBusy]=useState(false),[layoutError,setLayoutError]=useState('');
+  const layout=normalizeLayout(draft||saved?.layout),custom=!!draft||layout.enabled;
+  const editing=!!draft;
+  useEffect(()=>{setDraft(null);setLayoutError('')},[layoutKey]);
+  const updateDraft=value=>setDraft(normalizeLayout(value));
+  async function editLayout(){setLayoutBusy(true);setLayoutError('');try{const latest=await api('/board-layout?base='+encodeURIComponent(layoutKey));setDraft(normalizeLayout(latest.layout));setEditVersion(latest.version);setQuery('');setOnlyIn(false)}catch(e){setLayoutError(e.message)}finally{setLayoutBusy(false)}}
+  async function saveLayout(){setLayoutBusy(true);setLayoutError('');try{await api('/board-layout','PUT',{base:layoutKey,layout,version:editVersion});await onRefresh();setDraft(null)}catch(e){setLayoutError(e.message)}finally{setLayoutBusy(false)}}
   function changePlant(value){setBoardPlant(value);setPage(0);try{localStorage.setItem('attendance-board-plant',value)}catch{}}
   const root=useRef(null),stage=useRef(null),windowRef=useRef(null);
   const people=useMemo(()=>visibleEmployees.filter(e=>(!onlyIn||e.status==='IN')&&(!query||[e.name,e.nickname,e.id,e.department,e.line,e.position,e.office_department,productionSection(e)].some(s=>s?.toLowerCase().includes(query.toLowerCase())))),[employees,chosen,onlyIn,query]);
@@ -101,14 +111,15 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
     return orderBoardGroups(grouped,collect(visibleEmployees)).map(([name,workers])=>[name,sortPeople(workers,'position').sort((a,b)=>isOfficeGroup(name,workers)?0:(a.team||'').localeCompare(b.team||''))]);
   },[people,employees,chosen]);
   const pages=useMemo(()=>paginateBoard(groups,dimensions),[groups,dimensions]);
-  const currentPage=Math.min(page,pages.length-1),shown=fit&&mode==='large'?pages[currentPage]:groups;
+  const currentPage=Math.min(page,pages.length-1),shown=custom?layoutGroups(groups,layout).filter(([name])=>editing||!layout.groups[name]?.hidden):fit&&mode==='large'?pages[currentPage]:groups;
+  const groupNames=layoutGroups(groups,layout).map(([name])=>name);
   const shownCount=shown.reduce((sum,[,workers])=>sum+workers.length,0);
   useEffect(()=>{const listener=()=>{const active=document.fullscreenElement===root.current;setFullscreen(active);if(active){setFit(true);setQuery('');setOnlyIn(false)}};document.addEventListener('fullscreenchange',listener);return()=>document.removeEventListener('fullscreenchange',listener)},[]);
   useLayoutEffect(()=>{
     let frame;const measure=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
       if(!windowRef.current)return;const width=Math.floor(windowRef.current.clientWidth),height=Math.max(1,Math.floor(windowRef.current.clientHeight)-6);
       setDimensions(previous=>previous.width===width&&previous.height===height?previous:{width,height});
-      if(!stage.current)return;
+      if(!stage.current||custom)return;
       if(mode!=='all'||!fit){stage.current.removeAttribute('style');return;}
       const values={'--board-card-height':'38px','--board-card-width':'146px','--board-photo-size':'26px','--board-name-size':'11px','--board-position-size':'8px'};
       Object.entries(values).forEach(([key,value])=>stage.current.style.setProperty(key,value));
@@ -117,14 +128,20 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
       stage.current.style.width=(width/low)+'px';stage.current.style.setProperty('--compact-transform','scale('+low+')');
     })};
     const observer=new ResizeObserver(measure);observer.observe(root.current);observer.observe(windowRef.current);measure();return()=>{observer.disconnect();cancelAnimationFrame(frame)};
-  },[fit,mode,groups]);
-  useEffect(()=>{if(!fit||mode!=='large'||pages.length<2||!rotating||detailsOpen)return;const timer=setInterval(()=>setPage(previous=>(previous+1)%pages.length),15000);return()=>clearInterval(timer);},[fit,mode,pages.length,rotating,detailsOpen]);
+  },[fit,mode,groups,custom]);
+  useEffect(()=>{if(custom||!fit||mode!=='large'||pages.length<2||!rotating||detailsOpen)return;const timer=setInterval(()=>setPage(previous=>(previous+1)%pages.length),15000);return()=>clearInterval(timer);},[fit,mode,pages.length,rotating,detailsOpen,custom]);
   async function toggleFullscreen(){if(fullscreen){if(document.fullscreenElement)await document.exitFullscreen();else setFullscreen(false);return;}setFit(true);setQuery('');setOnlyIn(false);try{await root.current.requestFullscreen()}catch{setFullscreen(true)}}
   async function admin(){if(document.fullscreenElement)await document.exitFullscreen();setFullscreen(false);onAdminControls?.();}
-  return <section ref={root} className={'board-page redesigned-board '+(fit?'fit-all ':'')+(fullscreen?'tv-mode ':'')+(mode==='large'?'large-photo-board':'native-overview-board')}>
-    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>{chosen==='*'?'All plants':chosen}</small></div></div><div className="board-totals">{!plant&&<label className="board-plant-select">Plant<select aria-label="TV board plant" value={chosen} onChange={e=>changePlant(e.target.value)}><option value="*">All plants</option>{locations.map(p=><option key={p}>{p}</option>)}</select></label>}<div><b>{visibleEmployees.length}</b><small>Employees</small></div><div><b>{visibleEmployees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button><button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{onAdminControls&&<button className="primary" onClick={admin}>Admin controls</button>}</div></header>
-    {!fullscreen&&<div className="board-toolbar"><div className="search"><Search size={17}/><input aria-label="Search live board" placeholder="Find a person, department or line…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/></div><label className="checkbox-label"><input type="checkbox" checked={onlyIn} onChange={e=>{setOnlyIn(e.target.checked);setPage(0)}}/>Show clocked-in employees only</label><button className="secondary" onClick={()=>setFit(!fit)}>{fit?'Scrollable view':'Fit screen'}</button></div>}
-    <div className="board-stage-window" ref={windowRef}><div className="board-stage" ref={stage}>{shown.map(([name,workers])=><BoardRow key={name} name={name} workers={workers} settings={settings} onDetails={onDetails}/>)}</div></div>
-    {fit&&mode==='large'&&<div className="tv-fit-footer"><strong>{mode==='large'?shownCount+' of '+people.length+' employees · Larger photos':people.length+' employees · Compact overview'}</strong>{mode==='large'&&<div className="board-page-controls"><button disabled={pages.length<2} onClick={()=>setPage((currentPage+pages.length-1)%pages.length)} aria-label="Previous TV page">Previous</button><span>Page {currentPage+1} / {pages.length}</span><button disabled={pages.length<2} onClick={()=>setPage((currentPage+1)%pages.length)} aria-label="Next TV page">Next</button><button onClick={()=>setRotating(!rotating)}>{rotating?'Pause rotation':'Resume rotation'}</button></div>}<span>View only · Click a card for details</span></div>}
+  return <section ref={root} className={'board-page redesigned-board '+(fit?'fit-all ':'')+(fullscreen?'tv-mode ':'')+(custom?'custom-grid-board':mode==='large'?'large-photo-board':'native-overview-board')}>
+    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>{chosen==='*'?'All plants':chosen}</small></div></div><div className="board-totals">{!plant&&<label className="board-plant-select">Plant<select disabled={editing||layoutBusy} aria-label="TV board plant" value={chosen} onChange={e=>changePlant(e.target.value)}><option value="*">All plants</option>{locations.map(p=><option key={p}>{p}</option>)}</select></label>}<div><b>{visibleEmployees.length}</b><small>Employees</small></div><div><b>{visibleEmployees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}{!custom&&<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button>}<button className="secondary" disabled={editing} onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Admin controls</button>}</div></header>
+    {!fullscreen&&<div className="board-toolbar"><div className="search"><Search size={17}/><input aria-label="Search live board" disabled={editing} placeholder="Find a person, department or line…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/></div><label className="checkbox-label"><input type="checkbox" disabled={editing} checked={onlyIn} onChange={e=>{setOnlyIn(e.target.checked);setPage(0)}}/>Show clocked-in employees only</label>{!custom&&<button className="secondary" onClick={()=>setFit(!fit)}>{fit?'Scrollable view':'Fit screen'}</button>}{!editing&&<button className="secondary" disabled={layoutBusy} onClick={editLayout}>Edit layout</button>}</div>}
+    {layoutError&&!editing&&<p role="alert">{layoutError}</p>}
+    {editing&&<LayoutEditor layout={layout} onChange={updateDraft} onSave={saveLayout} onCancel={()=>{setDraft(null);setLayoutError('')}} busy={layoutBusy} error={layoutError} conflict={!!saved?.version&&saved.version!==editVersion}/>}
+    {custom&&<div className="layout-caption">{editing?'Layout preview': 'Shared layout'} · {shownCount} of {people.length} matching employees{people.length>shownCount?' · Some groups are hidden':''} · Positions shown below names</div>}
+    <div className="board-stage-window" ref={windowRef}><div className="board-stage" ref={stage} style={custom?{'--layout-columns':layout.columns,'--layout-gap':layout.gap+'px','--board-card-width':layout.cardWidth+'px','--board-card-height':layout.cardHeight+'px','--board-photo-size':layout.photoSize+'px','--board-name-size':layout.fontSize+'px','--board-position-size':Math.max(9,layout.fontSize-2)+'px','--board-card-gap':'6px','--board-grid-padding':'6px'}:undefined}>{shown.map(([name,workers])=>{
+      const row=<BoardRow name={name} workers={workers} settings={settings} sort={custom?layout.sort:'position'} onDetails={editing?undefined:onDetails}/>;
+      return custom?<LayoutGroup key={name} name={name} config={layout.groups[name]} layout={layout} editing={editing} names={groupNames} onMove={(source,target)=>updateDraft({...layout,order:moveGroup(groupNames,source,target)})} onChange={config=>setDraft(previous=>normalizeLayout({...previous,groups:{...previous.groups,[name]:config}}))}>{row}</LayoutGroup>:<React.Fragment key={name}>{row}</React.Fragment>;
+    })}{!shown.length&&<div className="empty">No visible groups. Use Edit layout to show hidden groups, or clear your filters.</div>}</div></div>
+    {!custom&&fit&&mode==='large'&&<div className="tv-fit-footer"><strong>{shownCount+' of '+people.length+' employees · Larger photos'}</strong><div className="board-page-controls"><button disabled={pages.length<2} onClick={()=>setPage((currentPage+pages.length-1)%pages.length)} aria-label="Previous TV page">Previous</button><span>Page {currentPage+1} / {pages.length}</span><button disabled={pages.length<2} onClick={()=>setPage((currentPage+1)%pages.length)} aria-label="Next TV page">Next</button><button onClick={()=>setRotating(!rotating)}>{rotating?'Pause rotation':'Resume rotation'}</button></div><span>View only · Click a card for details</span></div>}
   </section>;
 }

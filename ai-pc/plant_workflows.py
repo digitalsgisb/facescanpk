@@ -23,6 +23,7 @@ def encoded(value):
 def migrate(db):
     db.executescript('''
     CREATE TABLE IF NOT EXISTS plant_preferences(base TEXT PRIMARY KEY,config TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS board_layouts(base TEXT PRIMARY KEY,config TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS review_acknowledgements(entity_id TEXT PRIMARY KEY,
       signature TEXT NOT NULL,stale INTEGER NOT NULL,actor TEXT NOT NULL,recorded_at TEXT NOT NULL,reason TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS automatic_clockout(id INTEGER PRIMARY KEY CHECK(id=1),
@@ -59,6 +60,34 @@ def scope(assigned,requested,Problem):
         raise Problem('Choose a plant.')
     if assigned and requested!=assigned:raise Problem('This account manages its own plant only.',403)
     return requested
+
+
+def board_layout(db,base):
+    row=db.execute('SELECT config FROM board_layouts WHERE base=?',(base,)).fetchone()
+    config=json.loads(row['config']) if row else {}
+    return {'layout':config,'version':hashlib.sha256(encoded(config).encode()).hexdigest()}
+
+
+def save_board_layout(store,db,base,data,actor,Problem):
+    old=board_layout(db,base)
+    if data.get('version')!=old['version']:raise Problem('Layout changed on another display. Cancel to load the latest layout.',409)
+    config=data.get('layout')
+    allowed={'enabled','columns','gap','cardWidth','cardHeight','photoSize','fontSize','sort','groups','order'}
+    if not isinstance(config,dict) or set(config)-allowed:raise Problem('Invalid board layout.')
+    if type(config.get('enabled')) is not bool:raise Problem('Choose whether the custom grid is enabled.')
+    for key,low,high in [('columns',1,12),('gap',0,32),('cardWidth',120,360),('cardHeight',52,160),('photoSize',24,100),('fontSize',10,24)]:
+        if type(config.get(key)) is not int or not low<=config[key]<=high:raise Problem('Invalid layout size: '+key)
+    if config['photoSize']>config['cardHeight']-12 or config['fontSize']>(config['cardHeight']-12)//3:raise Problem('Photo or text exceeds card height.')
+    if config.get('sort') not in ('saved','position','name','status','manual','team'):raise Problem('Invalid employee sort.')
+    order=config.get('order');groups=config.get('groups')
+    if not isinstance(order,list) or len(order)>300 or any(not isinstance(x,str) or len(x)>240 for x in order) or len(set(order))!=len(order):raise Problem('Invalid group order.')
+    if not isinstance(groups,dict) or len(groups)>300:raise Problem('Invalid layout groups.')
+    for name,group in groups.items():
+        if not isinstance(name,str) or len(name)>240 or not isinstance(group,dict) or set(group)-{'span','height','hidden'}:raise Problem('Invalid layout group.')
+        if type(group.get('span')) is not int or not 1<=group['span']<=config['columns'] or type(group.get('height')) is not int or not 0<=group['height']<=1600 or type(group.get('hidden')) is not bool:raise Problem('Invalid group size or visibility.')
+    db.execute('INSERT INTO board_layouts VALUES(?,?) ON CONFLICT(base) DO UPDATE SET config=excluded.config',(base,encoded(config)))
+    store.audit(db,actor,'board_layout_updated',base or 'all-plants',old['layout'],config)
+    return board_layout(db,base)
 
 
 def controls(store,db,base):

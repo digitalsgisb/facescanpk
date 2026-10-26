@@ -28,6 +28,7 @@ import {EmployeePrivacy} from './employee-privacy.jsx';
 import {StaffAdministration,PlantConnections} from './staff-administration.jsx';
 import {POSITIONS,productionSection,scopeOptions} from './organisation.js';
 import './compact-controls.css';
+import './layout-editor.css';
 
 const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const dateLabel = s => s ? new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short',year:'numeric'}).format(new Date(s.includes('T')?s:s+'T12:00:00+08:00')) : '—';
@@ -154,7 +155,7 @@ function App(){
       {page==='attention'&&<AttentionCentre plant={auth.base||''} employees={state.employees} onRefresh={refresh} summary={attentionSummary} revision={state.revision} api={api} onEmployee={employee=>setDialog({type:'employee',employee:state.employees.find(e=>e.id===employee.id)||employee})} onAttendance={session=>setDialog({type:'correction',session,attention:true})} onScan={event=>setDialog({type:'review',event})} onLog={(item,category)=>{const dates=issueLogDates(item,category);navigate('attendance');setFrom(dates.from);setTo(dates.to);setSearch(item.employee_id);setHistoryLimit(200)}}/>}
       {page==='control'&&<>{auth.role==='admin'&&!auth.base&&<AutomaticClockout api={api}/>}<PlantShiftControls state={state} api={api} onRefresh={refresh} navigate={navigate}/></>}
       {page==='clock'&&<ClockControls employees={active} api={api} unlocked={clockUnlocked} onUnlocked={setClockUnlocked} onRefresh={()=>Promise.all([refresh(),refreshHistory()])} onEdit={openAttendance} initialId={clockInitialId} base={auth.base||''}/>}
-      {page==='board'&&<LiveBoard plant={auth.base||''} employees={active} settings={state.settings} live={live} detailsOpen={!!personDetails} onAdminControls={()=>{setClockInitialId(null);navigate('clock')}} onDetails={employee=>setPersonDetails(employee.id)} soundControl={<AttendanceSound notifications={notifications}/>}/>}
+      {page==='board'&&<LiveBoard api={api} onRefresh={refresh} layouts={state.board_layouts||{}} plant={auth.base||''} employees={active} settings={state.settings} live={live} detailsOpen={!!personDetails} onAdminControls={()=>{setClockInitialId(null);navigate('clock')}} onDetails={employee=>setPersonDetails(employee.id)} soundControl={<AttendanceSound notifications={notifications}/>}/>}
 
       {page==='employees'&&auth?.role==='admin'&&<EmployeeImport api={api} onRefresh={refresh} base={auth.base||''}/>}
       {page==='employees'&&<FaceRegistration employees={state.employees} exportCsv={exportCsv}/>}
