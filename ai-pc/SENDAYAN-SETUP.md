@@ -142,9 +142,9 @@ sudo systemctl status attendance-kiosk --no-pager
 
 On the updated dashboard:
 
-1. Open **Live board**, choose **SENDAYAN**, then **Edit layout** outside TV fullscreen.
+1. Open **Live board**, choose **SENDAYAN**, then **Edit layout**. You can also enter **TV fullscreen** first and use **Edit layout** in its header. Entering or leaving TV fullscreen keeps your unsaved draft.
 2. Enable **Use custom grid on all displays**.
-3. Choose grid columns, gaps, card width/height, photo size, name size and employee sort. Names and positions remain on the cards.
+3. Choose grid columns, gaps, card width/height, photo size, name size and employee sort. In fullscreen, expand **Layout settings** to change these options; collapse it to see more of the board. Save and Cancel remain available in the editor. Names and positions remain on the cards.
 4. Drag a department's handle to reorder it, or use its up/down buttons. Drag the bottom-right corner to resize its column span/minimum height. Numeric Width/Min height controls also work with keyboard/touch. Height is a minimum: groups grow to keep their employees visible.
 5. Use **Show** to hide/show a group. Hidden groups remain visible in the editor. New groups appear automatically. Employee sorting operates inside each team, preserving team boundaries. Manual employee order uses the existing saved employee ordering controls.
 6. Press **Save for all displays**. The layout is stored in the AI PC's database and connected browsers receive the update through the live event stream. Reconnecting displays fetch it again. **Cancel** discards the local preview. Concurrent saves are checked; cancel/reopen if another editor saved first.

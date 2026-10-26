@@ -1,18 +1,17 @@
 import React from 'react';
 import {defaultLayout} from './custom-layout.js';
 
-export function LayoutEditor({layout,onChange,onSave,onCancel,busy,error,conflict}){
+export function LayoutEditor({layout,onChange,onSave,onCancel,busy,error,conflict,fullscreen=false}){
   const update=(key,value)=>onChange({...layout,[key]:value});
   return <section className="layout-editor" aria-label="Board layout editor">
-    <div><strong>Edit shared layout</strong><p>Drag group handles to reorder. Drag a bottom-right corner to resize, or use the group controls. Save to apply to every display showing this plant.</p></div>
-    <div className="layout-options">
+    <div className="layout-editor-heading"><div><strong>Edit shared layout</strong><p>Drag group handles to reorder. Drag a bottom-right corner to resize, or use the group controls. Save to apply to every display showing this plant.</p></div><div className="layout-actions"><button className="secondary" disabled={busy} onClick={()=>onChange({...defaultLayout(),enabled:true})}>Reset draft</button><button className="secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy} onClick={onSave}>{busy?'Saving…':'Save for all displays'}</button></div></div>
+    <details className="layout-settings" open={!fullscreen}><summary>Layout settings · Grid, card sizes & sorting</summary><div className="layout-options">
       <label><input type="checkbox" checked={layout.enabled} onChange={e=>update('enabled',e.target.checked)}/>Use custom grid on all displays</label>
       {[["columns","Grid columns",1,12],["gap","Gap",0,32],["cardWidth","Card width",120,360],["cardHeight","Card height",52,160],["photoSize","Photo size",24,100],["fontSize","Name size",10,24]].map(([key,label,min,max])=><label key={key}>{label}<input type="number" min={min} max={max} value={layout[key]} onChange={e=>update(key,Number(e.target.value))}/></label>)}
       <label>Sort employees<select value={layout.sort} onChange={e=>update('sort',e.target.value)}><option value="position">Position hierarchy</option><option value="name">Name A–Z</option><option value="status">Clocked in first</option><option value="team">Team</option><option value="saved">Saved display order</option><option value="manual">Manual employee order from Shifts</option></select></label>
-    </div>
+    </div></details>
     {conflict&&<p role="alert">Another display saved a layout while you were editing. Cancel to load it before making further changes.</p>}
     {error&&<p role="alert">{error}</p>}
-    <div className="layout-actions"><button className="secondary" disabled={busy} onClick={()=>onChange({...defaultLayout(),enabled:true})}>Reset draft</button><button className="secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="primary" disabled={busy} onClick={onSave}>{busy?'Saving…':'Save for all displays'}</button></div>
   </section>;
 }
 
