@@ -21,6 +21,12 @@ The worker caches only public icons/assets and a connection-help page. API repli
 
 Dialogs, overlays, footers, filters, hover states and toasts use the current neutral palette. The original company logo remains in colour, while green/red still show attendance states and warnings retain their meaning. The sidebar's decorative layers pause while a dialog is open, the background blur is removed, and page scrolling locks without a width jump. Live attention-list refreshes retain the existing rows instead of replacing them with a loading screen. Phone form inputs use 16-pixel text to avoid automatic input zoom in mobile browsers.
 
+## Export attendance to Excel
+
+Open **Attendance log**, choose the start and end dates, then press **Export Excel**. Both dates are included (up to one year per export). Employee search also applies to Excel; clear the search to export everyone. All matching sessions are exported, including rows beyond **Load more sessions**. An empty period produces a workbook with column headings.
+
+The `.xlsx` report includes employee details, work date, Malaysia clock-in/out timestamps, elapsed hours for closed sessions, planned hours, schedule, status and review flags. Elapsed hours are the time between clock-in and clock-out, without break deductions; open sessions have blank hours. Overnight sessions belong to their shift start work date. Plant administrators export only their assigned plant. Update/rebuild the AI PC app to enable this feature; the Pi needs no changes.
+
 ## Live attendance notifications
 
 Confirmed kiosk and dashboard clock-ins and clock-outs show an employee notification at the right of the screen for 3 seconds, including TV fullscreen. A soft bell plays once when each notification appears. Rapid scans queue in order. Opening the dashboard does not replay existing records; duplicate scans and scans awaiting review stay silent.

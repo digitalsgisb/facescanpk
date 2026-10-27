@@ -1,6 +1,7 @@
 """Company-network attendance service. Run on the AI PC; no cloud dependency."""
 import argparse
 import attendance_maintenance
+import attendance_export
 import base64
 import hashlib
 import hmac
@@ -556,7 +557,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.actor = who['id']
                 self.plant = who.get('base','')
                 if self.plant and scope == 'admin':
-                    allowed=(method=='GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/review','/api/clock-access','/api/attention','/api/plant-controls')) or (method in ('POST','DELETE') and route in ('/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/apply','/api/reviews/preview','/api/reviews/bulk')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
+                    allowed=(method=='GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/attendance/export','/api/review','/api/clock-access','/api/attention','/api/plant-controls')) or (method in ('POST','DELETE') and route in ('/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/apply','/api/reviews/preview','/api/reviews/bulk')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
                     if route=='/api/plant-controls' and method=='PUT':allowed=True
                     if route=='/api/board-layout' and method in ('GET','PUT'):allowed=True
                     if not allowed:
@@ -611,6 +612,22 @@ class Handler(BaseHTTPRequestHandler):
                     db.commit()
                     self.store.emit()
                     return self.send({'ok':True})
+                if route == '/api/attendance/export' and method == 'GET':
+                    if scope != 'admin':
+                        raise Problem('Administrator permission is required to export attendance.',403)
+                    if not query.get('from') or not query.get('to'):
+                        raise Problem('Choose both a start date and an end date.')
+                    rows = self.sessions(db, query)
+                    search = query.get('search',[''])[0].casefold()
+                    if search:
+                        rows = [s for s in rows if any(search in (s.get(k) or '').casefold() for k in ('name','nickname','employee_id'))]
+                    try:
+                        raw = attendance_export.workbook(rows)
+                    except ValueError as exc:
+                        raise Problem(str(exc))
+                    filename = f'attendance_{day(query["from"][0])}_to_{day(query["to"][0])}.xlsx'
+                    return self.send(raw, content_type=attendance_export.MIME,
+                                     headers={'Content-Disposition':f'attachment; filename="{filename}"'})
                 if route == '/api/attendance' and method == 'GET':
                     return self.send({'sessions':self.sessions(db, query)})
                 if scope not in ('admin','employee_admin'):
