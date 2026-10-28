@@ -64,3 +64,21 @@ class SpreadsheetTests(unittest.TestCase):
         self.assertEqual(status,200)
         self.request('/api/employees/PK','PUT',{'nickname':'New name'})
         self.assertEqual(self.apply(report)[0],409)
+
+    def test_assignment_file_updates_existing_employees_only(self):
+        before={e['id']:e for e in self.request('/api/employees')[1]['employees']}
+        payload={'format':'sgi-team-assignments-v1','plant':'SENDAYAN','employees':[{'id':'SD','team':'C','line':'SFC-L1'}]}
+        status,report=self.request('/api/employee-import/preview','POST',{'payload':payload})
+        self.assertEqual(status,200)
+        self.assertEqual(set(report['changes'][0]['changes']),{'team','line'})
+        self.assertEqual(self.apply({**report,'payload':payload})[0],200)
+        after={e['id']:e for e in self.request('/api/employees')[1]['employees']}
+        for field in ('id','name','base','department','position','schedule_id','photo_url','active'):
+            self.assertEqual(after['SD'][field],before['SD'][field])
+        self.assertEqual(after['PK'],before['PK'])
+
+    def test_assignment_file_cannot_create_move_or_rename_employees(self):
+        for employee,status in [({'id':'NEW','team':'C'},409),({'id':'PK','team':'C'},409),
+                                ({'id':'SD','team':'C','name':'Replacement'},400)]:
+            payload={'format':'sgi-team-assignments-v1','plant':'SENDAYAN','employees':[employee]}
+            self.assertEqual(self.request('/api/employee-import/preview','POST',{'payload':payload})[0],status)

@@ -31,6 +31,10 @@ Edit **Plant / location**, **Department**, **Line**, **Team**, and **Default shi
 
 After a source update, rebuild the Docker image, or run `python -m pip install -r requirements.txt` for a non-Docker installation before restarting the API.
 
+### Existing employee assignment files
+
+A prepared `sgi-team-assignments-v1` JSON file can be uploaded through the same import panel. It contains a plant, existing full employee IDs, teams and optional production lines. The preview rejects missing IDs, employees from another plant, and fields outside team/line; it cannot create, rename or move employees. Review its changes before applying. Source spreadsheets with shortened IDs must be matched to the existing employee register first.
+
 ### Equal shift sections on the live board
 
 When a group has no Normal employees, A/B (or C/D) divide the row equally. The last shift no longer inherits an empty Normal column. Populated Normal sections remain visible; employee cards are centered inside custom layout shift sections. Existing card sizes and ordering remain available.

@@ -20,6 +20,22 @@ def migrate(db):
 
 
 def validate_payload(payload, Problem):
+    if isinstance(payload,dict) and payload.get('format') == 'sgi-team-assignments-v1':
+        rows=payload.get('employees')
+        if not isinstance(payload.get('plant'),str) or not payload['plant']:
+            raise Problem('A plant is required for team assignments.')
+        if not isinstance(rows,list) or not 1<=len(rows)<=5000:
+            raise Problem('Choose between 1 and 5000 existing employees.')
+        seen=set()
+        for row in rows:
+            if not isinstance(row,dict) or not {'id','team'}<=set(row) or set(row)-{'id','team','line'}:
+                raise Problem('Team assignment files may contain only employee ID, team and line.')
+            if any(not isinstance(v,str) or len(v)>500 for v in row.values()):
+                raise Problem('Team assignment fields must be text.')
+            if not re.fullmatch(r'[A-Za-z0-9-]{1,40}',row['id']) or row['id'] in seen:
+                raise Problem('Employee IDs must be valid and unique.')
+            seen.add(row['id'])
+        return rows
     if isinstance(payload,dict) and payload.get('format') == 'sgi-employee-roster-v1':
         rows=payload.get('employees')
         if not isinstance(rows,list) or not 1<=len(rows)<=5000:
@@ -56,13 +72,18 @@ def validate_payload(payload, Problem):
 
 def preview(store,db,payload,FIELDS,Problem,base=''):
     rows=validate_payload(payload,Problem)
-    roster=payload.get('format')=='sgi-employee-roster-v1'
+    assignment_only=payload.get('format')=='sgi-team-assignments-v1'
+    roster=assignment_only or payload.get('format')=='sgi-employee-roster-v1'
+    if assignment_only and base and payload['plant']!=base:
+        raise Problem('This assignment file belongs to another plant.',403)
     if base and any(r.get('base',base)!=base for r in rows):
         raise Problem('This account can import only its own plant location.',403)
     existing={r['id']:dict(r) for r in db.execute('SELECT * FROM employees ORDER BY id')}
     changes=[]
     for source in rows:
         old=existing.get(source['id'])
+        if assignment_only and (not old or old.get('base')!=payload['plant']):
+            raise Problem('Assignment employee '+source['id']+' is missing or belongs to another plant. No employees were created or moved.',409)
         if base and old and old.get('base','')!=base:
             raise Problem('An employee ID belongs to another location. Ask the full administrator to review it.',403)
         if roster:
