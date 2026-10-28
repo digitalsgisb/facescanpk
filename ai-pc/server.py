@@ -1,7 +1,8 @@
 """Company-network attendance service. Run on the AI PC; no cloud dependency."""
 import argparse
 import attendance_maintenance
-import attendance_export
+import employee_export
+import employee_spreadsheet
 import base64
 import hashlib
 import hmac
@@ -557,7 +558,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.actor = who['id']
                 self.plant = who.get('base','')
                 if self.plant and scope == 'admin':
-                    allowed=(method=='GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/attendance/export','/api/review','/api/clock-access','/api/attention','/api/plant-controls')) or (method in ('POST','DELETE') and route in ('/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/apply','/api/reviews/preview','/api/reviews/bulk')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
+                    allowed=(method=='GET' and route in ('/api/employee-template','/api/state','/api/events','/api/employees','/api/schedules','/api/attendance','/api/review','/api/clock-access','/api/attention','/api/plant-controls')) or (method in ('POST','DELETE') and route in ('/api/employee-export','/api/clock','/api/clock/batch','/api/clock/reset','/api/clock-access','/api/photos','/api/manual-attendance','/api/employee-import/preview','/api/employee-import/spreadsheet','/api/employee-import/apply','/api/reviews/preview','/api/reviews/bulk')) or bool(re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?',route)) or (method in ('PUT','POST') and bool(re.fullmatch(r'/api/(?:attendance|review)/[A-Za-z0-9-]+',route)))
                     if route=='/api/plant-controls' and method=='PUT':allowed=True
                     if route=='/api/board-layout' and method in ('GET','PUT'):allowed=True
                     if not allowed:
@@ -566,7 +567,7 @@ class Handler(BaseHTTPRequestHandler):
                     eid=route.split('/')[3]
                     self.check_plant(db,eid)
                 if scope == 'employee_admin':
-                    allowed = (method == 'GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules')) or (route == '/api/photos' and method == 'POST') or (re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?', route) and method in ('GET','POST','PUT','DELETE'))
+                    allowed = (method == 'GET' and route in ('/api/state','/api/events','/api/employees','/api/schedules')) or (route in ('/api/photos','/api/employee-export') and method == 'POST') or (re.fullmatch(r'/api/employees(?:/[A-Za-z0-9-]+(?:/consents|/photo)?)?', route) and method in ('GET','POST','PUT','DELETE'))
                     if not allowed:
                         raise Problem('Employee administrator permission is required for this operation.',403)
                 if scope == 'kiosk' and route not in ('/api/scans','/api/heartbeat','/api/employees','/api/schedules'):
@@ -612,21 +613,31 @@ class Handler(BaseHTTPRequestHandler):
                     db.commit()
                     self.store.emit()
                     return self.send({'ok':True})
-                if route == '/api/attendance/export' and method == 'GET':
+                if route == '/api/employee-template' and method == 'GET':
                     if scope != 'admin':
-                        raise Problem('Administrator permission is required to export attendance.',403)
-                    if not query.get('from') or not query.get('to'):
-                        raise Problem('Choose both a start date and an end date.')
-                    rows = self.sessions(db, query)
-                    search = query.get('search',[''])[0].casefold()
-                    if search:
-                        rows = [s for s in rows if any(search in (s.get(k) or '').casefold() for k in ('name','nickname','employee_id'))]
-                    try:
-                        raw = attendance_export.workbook(rows)
-                    except ValueError as exc:
-                        raise Problem(str(exc))
-                    filename = f'attendance_{day(query["from"][0])}_to_{day(query["to"][0])}.xlsx'
-                    return self.send(raw, content_type=attendance_export.MIME,
+                        raise Problem('Administrator access required.',403)
+                    return self.send(employee_spreadsheet.template(db,self.plant),content_type=employee_export.MIME,
+                                     headers={'Content-Disposition':'attachment; filename="employee-import-template.xlsx"'})
+                if route == '/api/employee-export' and method == 'POST':
+                    if scope not in ('admin','employee_admin'):
+                        raise Problem('Employee management permission is required to export shifts.',403)
+                    data = self.body()
+                    start, end = day(data.get('from')), day(data.get('to'))
+                    if end < start or (end-start).days > 366:
+                        raise Problem('Choose a date range of up to one year.')
+                    ids = data.get('employee_ids')
+                    if not isinstance(ids,list) or any(not isinstance(eid,str) for eid in ids):
+                        raise Problem('Choose the employees to export.')
+                    ids = set(ids)
+                    employees = [dict(e) for e in db.execute('SELECT * FROM employees')
+                                 if e['id'] in ids and (not self.plant or e['base'] == self.plant)]
+                    if len(employees) != len(ids):
+                        raise Problem('Some selected employees are unavailable for this account.',403)
+                    if len(employees) * ((end-start).days+1) > 1048575:
+                        raise Problem('Too many rows for Excel. Choose fewer employees or dates.')
+                    raw = employee_export.workbook(employee_export.roster_rows(self.store,db,employees,start,end))
+                    filename = f'employee_shifts_{start}_to_{end}.xlsx'
+                    return self.send(raw, content_type=employee_export.MIME,
                                      headers={'Content-Disposition':f'attachment; filename="{filename}"'})
                 if route == '/api/attendance' and method == 'GET':
                     return self.send({'sessions':self.sessions(db, query)})
@@ -690,17 +701,21 @@ class Handler(BaseHTTPRequestHandler):
                     if not db.execute('SELECT 1 FROM attendance_access WHERE token_hash=? AND expires>?',
                                       (digest(self.session_token),time.time())).fetchone():
                         raise Problem('Enter the administrator password to unlock attendance controls.',403)
-                if route in ('/api/clock/reset','/api/employee-import/preview','/api/employee-import/apply') and method == 'POST':
+                if route in ('/api/clock/reset','/api/employee-import/preview','/api/employee-import/spreadsheet','/api/employee-import/apply') and method == 'POST':
                     if scope != 'admin':
                         raise Problem('Administrator access required.',403)
                     data=self.body()
                     db.execute('BEGIN IMMEDIATE')
-                    if route.endswith('/preview'):
+                    if route.endswith('/spreadsheet'):
+                        data={'payload':employee_spreadsheet.parse(data.get('file_base64'),Problem)}
+                    if route.endswith(('/preview','/spreadsheet')):
                         response,_=testing_operations.preview(self.store,db,data.get('payload'),FIELDS,Problem,self.plant)
                     else:
                         response=testing_operations.operation(self.store,db,'reset' if route.endswith('/reset') else 'employee-import',data,self.actor,FIELDS,Problem,datetime.now(KL).isoformat(),self.plant)
+                    if route.endswith('/spreadsheet'):
+                        response['payload']=data['payload']
                     db.commit()
-                    if not route.endswith('/preview'):
+                    if not route.endswith(('/preview','/spreadsheet')):
                         self.store.emit()
                     return self.send(response)
                 if route == '/api/clock/batch' and method == 'POST':

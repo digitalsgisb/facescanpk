@@ -1,7 +1,7 @@
 import {filterBoardPlant} from './plant-view.js';
 import {employeeLocation} from './transfer-utils.js';
 import {syncLabel} from './employee-sync.js';
-import {paginateBoard,isOfficeGroup,teamColumnWeight,boardTeams,orderBoardGroups} from './board-layout.js';
+import {paginateBoard,isOfficeGroup,teamColumnWeight,visibleBoardTeams,orderBoardGroups} from './board-layout.js';
 import {productionSection,sortEmployees,employeeGroup} from './organisation.js';
 import {normalizeLayout,layoutGroups,moveGroup,orderCards,moveCardOrder} from './custom-layout.js';
 import {LayoutEditor,LayoutGroup,LayoutCard} from './layout-editor.jsx';
@@ -45,16 +45,14 @@ function boardGroupOrder(a,b){
 function BoardRow({name,workers,onDetails,settings,sort='position',cardLayout,editing=false,onCardSize,onCardMove}){
   const office=isOfficeGroup(name,workers);
   const label=productionSection(workers[0])?(workers[0].line?.trim()||'Line unassigned'):(workers[0]?.department||'Department unassigned');
-  const teams=office?[['',workers]]:boardTeams(workers);
-  const emptyNormal=!office&&teams.length>1&&!teams.find(([team])=>team==='N')?.[1].length;
-  const beforeNormal=teams.findIndex(([team])=>team==='N')-1;
+  const teams=office?[['',workers]]:visibleBoardTeams(workers);
   const cards=members=>{
     const sorted=sortPeople(members,sort,settings),arranged=cardLayout?orderCards(sorted,cardLayout.cardOrder):sorted,ids=arranged.map(e=>e.id);
     return arranged.map(e=>cardLayout?<LayoutCard key={e.id} employee={e} layout={cardLayout} editing={editing} teamIds={ids} onSize={onCardSize} onMove={onCardMove}><BoardEmployee employee={e} onDetails={onDetails}/></LayoutCard>:<BoardEmployee key={e.id} employee={e} onDetails={onDetails}/>);
   };
   return <section className={'tv-department board-group '+(office?'office-group':'shift-group')+(teams.length===1?' single-team':'')} aria-label={name}>
     <div className="tv-department-title" title={name}><h3>{label}</h3><small><b>{workers.filter(e=>e.status==='IN').length}</b> / {workers.length}</small>{!office&&teams.length===1&&<span className="board-solo-team">{teams[0][0]==='N'?'Normal hours':teams[0][0]}</span>}</div>
-    <div className="board-group-teams" style={office?undefined:{gridTemplateColumns:teams.map(([team])=>`minmax(0, ${(teams.length===1?1:teamColumnWeight(team))}fr)`).join(' ')}}>{teams.map(([team,members],index)=>emptyNormal&&team==='N'?null:<section style={emptyNormal&&index===beforeNormal?{gridColumn:`${index+1} / span 2`}:undefined} className={'board-team-row '+(office?'office-row':'shift-team-'+team.toLowerCase())+(!members.length?' empty-shift':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
+    <div className="board-group-teams" style={office?undefined:{gridTemplateColumns:teams.map(([team])=>`minmax(0, ${(teams.length===1?1:teamColumnWeight(team))}fr)`).join(' ')}}>{teams.map(([team,members])=><section className={'board-team-row '+(office?'office-row':'shift-team-'+team.toLowerCase())+(!members.length?' empty-shift':'')} key={team} aria-label={office?'Office employees':team==='Unassigned'?'Team unassigned':'Team '+team}>
       {!office&&<h4 className={'board-team-strip team-'+team.toLowerCase()} title={team==='N'?'Normal working hours':team==='Unassigned'?'Team unassigned':'Team '+team}><span>{team==='Unassigned'?'Unassigned':'Team '+team}</span><small>{members.length?members.filter(e=>e.status==='IN').length+' / '+members.length:'—'}</small></h4>}
       <div className="tv-department-people">{cards(members)}{!members.length&&<span className="board-empty-team">—</span>}</div>
     </section>)}</div>

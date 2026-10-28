@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {boardHeight,paginateBoard,boardTeams,teamColumnWeight,orderBoardGroups} from './board-layout.js';
+import {boardHeight,paginateBoard,boardTeams,visibleBoardTeams,teamColumnWeight,orderBoardGroups} from './board-layout.js';
 
 test('large-photo TV pages fit native 1366x768 and preserve every employee',()=>{
   const groups=Array.from({length:10},(_,i)=>[i?'Group '+i:'OFFICE',Array.from({length:i?16:29},(_,j)=>({id:i+'-'+j,team:j%2?'A':'B'}))]);
@@ -67,4 +67,16 @@ test('plant sections stay together and C/D/N uses the same shift ordering',()=>{
     group('PORT KLANG','Mixed',['A','B','N']),group('SENDAYAN','OFFICE',['N'])];
   assert.deepEqual(orderBoardGroups(groups).map(([name])=>name),[
     'PORT KLANG / Mixed','PORT KLANG / Normal','SENDAYAN / OFFICE','SENDAYAN / Mixed','SENDAYAN / C/D','SENDAYAN / Normal']);
+});
+
+
+test('empty Normal leaves equal shift halves for A/B and C/D',()=>{
+  for(const pair of [['A','B'],['C','D']]){
+    const people=pair.flatMap((team,index)=>Array.from({length:index?10:14},()=>({team})));
+    const teams=visibleBoardTeams(people);
+    assert.deepEqual(teams.map(([team])=>team),pair);
+    const total=teams.reduce((sum,[team])=>sum+teamColumnWeight(team),0);
+    assert.deepEqual(teams.map(([team])=>teamColumnWeight(team)/total),[.5,.5]);
+    assert.equal(visibleBoardTeams([...people,{team:'N'}]).length,3);
+  }
 });

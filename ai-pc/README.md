@@ -21,11 +21,27 @@ The worker caches only public icons/assets and a connection-help page. API repli
 
 Dialogs, overlays, footers, filters, hover states and toasts use the current neutral palette. The original company logo remains in colour, while green/red still show attendance states and warnings retain their meaning. The sidebar's decorative layers pause while a dialog is open, the background blur is removed, and page scrolling locks without a width jump. Live attention-list refreshes retain the existing rows instead of replacing them with a loading screen. Phone form inputs use 16-pixel text to avoid automatic input zoom in mobile browsers.
 
-## Export attendance to Excel
+## Import employee locations, teams and default shifts from Excel
 
-Open **Attendance log**, choose the start and end dates, then press **Export Excel**. Both dates are included (up to one year per export). Employee search also applies to Excel; clear the search to export everyone. All matching sessions are exported, including rows beyond **Load more sessions**. An empty period produces a workbook with column headings.
+Open **Employees → Import employees & shifts from Excel**. Download the template prefilled with current active employees, edit it in Excel, upload the `.xlsx` file, review the proposed field changes, and press **Back up and apply reviewed changes**. Existing SGI JSON imports still work. This feature requires an administrator account.
 
-The `.xlsx` report includes employee details, work date, Malaysia clock-in/out timestamps, elapsed hours for closed sessions, planned hours, schedule, status and review flags. Elapsed hours are the time between clock-in and clock-out, without break deductions; open sessions have blank hours. Overnight sessions belong to their shift start work date. Plant administrators export only their assigned plant. Update/rebuild the AI PC app to enable this feature; the Pi needs no changes.
+Employee ID identifies each person and must remain text (preserving leading zeros). Blank cells leave existing values unchanged; **Unassigned** clears optional fields. Add a new row with an ID, name and uppercase plant/location to create an employee. Employees absent from the file, photos, attendance and archived status are preserved. Up to 5000 employees / 2 MB per upload. The template includes available shift IDs and a Read me sheet.
+
+Edit **Plant / location**, **Department**, **Line**, **Team**, and **Default shift ID** to update the roster in bulk. Team/location changes pick up the corresponding saved group shift rules. Default shifts are fallback working hours: team rotations, group shifts and date overrides retain priority. Use **Shifts** for those team rules and dated exceptions. The preview rejects unknown shifts, invalid/duplicate IDs, invalid teams, cross-plant edits and stale employee data. Applying uses the existing audit trail, database transaction and pre-update backup.
+
+After a source update, rebuild the Docker image, or run `python -m pip install -r requirements.txt` for a non-Docker installation before restarting the API.
+
+### Equal shift sections on the live board
+
+When a group has no Normal employees, A/B (or C/D) divide the row equally. The last shift no longer inherits an empty Normal column. Populated Normal sections remain visible; employee cards are centered inside custom layout shift sections. Existing card sizes and ordering remain available.
+
+## Export employee locations and shifts to Excel
+
+Open **Employees**, optionally filter by location, department, line/name or team, then press **Export Excel**. Choose the start and end work dates (both included, up to one year), review the employee count, and press **Download Excel**. The file includes every employee matching the directory filters, even employees without attendance records. The Active/Archived tab also applies.
+
+Each employee has one row per selected date with their ID, name, plant/location, company, department, production section, line, team, position and assigned shift. Shift start/end timestamps use Malaysia time, including next-day ends for overnight shifts. The report resolves saved rotation, overtime and date overrides for each date. Missing shifts/locations are labelled unassigned. Location and profile details reflect the current employee setup; this is a planned shift roster, not historical location tracking or clock-in/out data. Plant accounts can export only their assigned plant.
+
+Update/rebuild the AI PC app to enable the feature; the Pi needs no changes.
 
 ## Live attendance notifications
 

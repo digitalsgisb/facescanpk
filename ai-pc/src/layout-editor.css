@@ -6,3 +6,6 @@
 .redesigned-board.native-overview-board .shift-group.board-group .tv-card-name>small{display:block;font-size:8px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.redesigned-board.native-overview-board .shift-group.board-group .tv-card-name>strong{-webkit-line-clamp:1;font-size:11px}.redesigned-board.native-overview-board .board-group .tv-card-name{min-width:0}
 @container layout-group (max-width:620px){.redesigned-board.custom-grid-board .shift-group .board-group-teams{grid-template-columns:minmax(0,1fr)!important}.redesigned-board.custom-grid-board .shift-group .board-team-row{grid-column:auto!important;border-right:0}}
 @media(max-width:650px){.redesigned-board.custom-grid-board .board-stage{grid-template-columns:minmax(0,1fr)}.custom-grid-board .layout-group{grid-column:1!important}.layout-actions{flex-wrap:wrap}.layout-options label{max-width:100%}.layout-options select{max-width:100%}}
+
+/* Keep fixed-size employee cards centered within equally sized shift sections. */
+.redesigned-board.custom-grid-board .shift-group .tv-department-people{justify-content:center}

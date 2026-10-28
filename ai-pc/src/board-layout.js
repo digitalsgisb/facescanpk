@@ -23,15 +23,15 @@ export function boardTeams(people){
   return names.map(name=>[name,members.get(name)||[]]);
 }
 
+// An absent Normal team must not donate its column to only the last shift.
+export const visibleBoardTeams=people=>boardTeams(people).filter(([team,members],_,teams)=>team!=='N'||members.length||teams.length===1);
+
 export function boardHeight(groups,{width,cardWidth=204,cardHeight=72,gap=8,padding=8,labelWidth=148,officeLabelWidth=108,minLabel=76,teamHeader=24}){
   return groups.reduce((total,[name,people])=>{
-    const office=isOfficeGroup(name,people),teams=office?[['',people]]:boardTeams(people);
+    const office=isOfficeGroup(name,people),teams=office?[['',people]]:visibleBoardTeams(people);
     const weight=teams.reduce((sum,[team])=>sum+teamColumnWeight(team),0);
-    const emptyNormal=!office&&teams.length>1&&!teams.find(([team])=>team==='N')?.[1].length;
-    const beforeNormal=teams.findIndex(([team])=>team==='N')-1;
     const heights=teams.map(([team,members],index)=>{
-      if(emptyNormal&&team==='N')return 0;
-      const teamWidth=(width-(office?officeLabelWidth:labelWidth)-2)*(office||width<=620?1:(teamColumnWeight(team)+(emptyNormal&&index===beforeNormal&&width>620?teamColumnWeight('N'):0))/weight);
+      const teamWidth=(width-(office?officeLabelWidth:labelWidth)-2)*(office||width<=620?1:teamColumnWeight(team)/weight);
       const columns=Math.max(1,Math.floor((teamWidth-(office?0:1)-padding*2+gap)/(cardWidth+gap)));
       const cards=members.length?Math.ceil(members.length/columns)*(cardHeight+gap)-gap:16;
       return cards+padding*2+(office?1:teams.length>1?teamHeader:0);

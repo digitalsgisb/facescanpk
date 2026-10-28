@@ -5,6 +5,8 @@ import re
 import uuid
 from datetime import datetime
 
+ROSTER_FIELDS = ('id','name','nickname','company','base','department','office_department','production_section','line','team','position','employment_department','job_type','schedule_id')
+
 IMPORT_FIELDS = ('id','name','company','base','employment_department','job_type')
 
 
@@ -18,6 +20,20 @@ def migrate(db):
 
 
 def validate_payload(payload, Problem):
+    if isinstance(payload,dict) and payload.get('format') == 'sgi-employee-roster-v1':
+        rows=payload.get('employees')
+        if not isinstance(rows,list) or not 1<=len(rows)<=5000:
+            raise Problem('Import must contain between 1 and 5000 employees.')
+        seen=set()
+        for row in rows:
+            if not isinstance(row,dict) or not row.get('id') or set(row)-set(ROSTER_FIELDS):
+                raise Problem('Invalid employee spreadsheet fields.')
+            if any(not isinstance(v,str) or len(v)>500 for v in row.values()):
+                raise Problem('Imported employee fields must be text of at most 500 characters.')
+            if not re.fullmatch(r'[A-Za-z0-9-]{1,40}',row['id']) or row['id'] in seen:
+                raise Problem('Employee IDs must be valid and unique. No records were changed.')
+            seen.add(row['id'])
+        return rows
     if not isinstance(payload,dict) or payload.get('format') != 'sgi-employees-v1':
         raise Problem('Choose an SGI employee update JSON file.')
     rows=payload.get('employees')
@@ -40,7 +56,8 @@ def validate_payload(payload, Problem):
 
 def preview(store,db,payload,FIELDS,Problem,base=''):
     rows=validate_payload(payload,Problem)
-    if base and any(r['base']!=base for r in rows):
+    roster=payload.get('format')=='sgi-employee-roster-v1'
+    if base and any(r.get('base',base)!=base for r in rows):
         raise Problem('This account can import only its own plant location.',403)
     existing={r['id']:dict(r) for r in db.execute('SELECT * FROM employees ORDER BY id')}
     changes=[]
@@ -48,19 +65,30 @@ def preview(store,db,payload,FIELDS,Problem,base=''):
         old=existing.get(source['id'])
         if base and old and old.get('base','')!=base:
             raise Problem('An employee ID belongs to another location. Ask the full administrator to review it.',403)
-        department='R&D' if source['employment_department']=='RESEARCH & DEVELOPMENT' else source['employment_department']
-        # Preserve Office board placement, while refreshing its represented department.
-        updates={**source,'position':source['job_type']}
-        if old and old.get('department')=='OFFICE':
-            updates.update(department='OFFICE',office_department=department)
+        if roster:
+            updates=dict(source)
+            if not old and (not source.get('name') or not source.get('base')):
+                raise Problem('New employees need a name and plant / location.')
+            if 'name' in source and not source['name'].strip():
+                raise Problem('Employee names cannot be blank.')
         else:
-            updates['department']=department
+            department='R&D' if source['employment_department']=='RESEARCH & DEVELOPMENT' else source['employment_department']
+            # Preserve Office board placement, while refreshing its represented department.
+            updates={**source,'position':source['job_type']}
+            if old and old.get('department')=='OFFICE':
+                updates.update(department='OFFICE',office_department=department)
+            else:
+                updates['department']=department
         after={**(old or {'active':True,'schedule_id':None}),**updates}
+        if after.get('schedule_id')=='':
+            after['schedule_id']=None
         if after.get('department')!='PRODUCTION' or (after.get('line') or '').upper()!='FC':
             after['checksheet_group']=''
         store.validate_employee(db,after)
-        fields={k:{'before':old.get(k,'') if old else None,'after':v} for k,v in updates.items() if k!='id' and (not old or old.get(k,'')!=v)}
-        changes.append({'id':source['id'],'base':source['base'],'action':'create' if not old else 'update' if fields else 'unchanged',
+        if old and after.get('checksheet_group') != old.get('checksheet_group'):
+            updates['checksheet_group']=after['checksheet_group']
+        fields={k:{'before':old.get(k,'') if old else None,'after':after.get(k)} for k in updates if k!='id' and (not old or old.get(k,'')!=after.get(k))}
+        changes.append({'id':source['id'],'base':after.get('base',''),'action':'create' if not old else 'update' if fields else 'unchanged',
                         'changes':fields,'after':after})
     state=[{k:row.get(k) for k in (*FIELDS,'updated_at')} for row in existing.values()]
     token=hashlib.sha256(canonical({'rows':rows,'state':state}).encode()).hexdigest()
