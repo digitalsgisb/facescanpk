@@ -1,3 +1,5 @@
+**Checksheet OT and shift-board connection:** see [CHECKSHEET-SHIFT-BOARD.md](./CHECKSHEET-SHIFT-BOARD.md) to drive employee cards from confirmed Checksheet shifts with a 15/30-minute grace period.
+
 # AI PC · React dashboard and attendance API
 
 This entire folder goes on the **AI PC**. It includes the React source and build, Python API, SQLite storage code, schedules, employee management and audited attendance corrections. The backend must run alongside the dashboard; copying React alone does not provide attendance storage or Pi connectivity.

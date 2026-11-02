@@ -25,6 +25,7 @@ export function EmployeeDetails({employee, onClose}) {
     ...(employee.department?.trim().toUpperCase()==='OFFICE'?[['Office department',employee.office_department||'Unassigned']]:[]),
     ['Production line', employee.line || 'Unassigned'], ['Position', employee.position || 'Unassigned'],
     ['Team', employee.team || 'Unassigned'], ['Working hours', employee.effective_schedule ? `${employee.effective_schedule.start} – ${employee.effective_schedule.end}` : 'Unassigned'],
+    ...(employee.checksheet_shift ? [['Checksheet shift', employee.checksheet_shift.shift+' · '+(employee.checksheet_shift.overtime?'WITH OT':'NO OT')+' · '+employee.checksheet_shift.line], ['Checksheet start', clockTime(employee.checksheet_shift.startAt)], ['Checksheet end', clockTime(employee.checksheet_shift.endAt)], ['Board turns grey', clockTime(employee.checksheet_shift.greyAt)], ['Checksheet status', employee.checksheet_shift.state]] : []),
     ['Current clock-in', clockTime(employee.session?.time_in)],
   ];
   return createPortal(<div className="modal-backdrop" onMouseDown={event => {if(event.target === event.currentTarget) onClose();}}>
