@@ -28,7 +28,7 @@ export function EmployeeImport({api,onRefresh,base=''}) {
     }catch(e){setMessage(e.message);if(e.status===409){setReport(null);pending.current=null}}
     finally{saving.current=false;setBusy(false)}
   }
-  return <details className="card form-pad employee-import"><summary>Import employees & shifts from Excel</summary>
+  return <details className="card form-pad employee-import" data-update-blocked={!!payload || busy}><summary>Import employees & shifts from Excel</summary>
     <p>{base||'All plants'} · Bulk-update locations, departments, lines, teams and default shifts. Preview before applying.</p>
     <a className="secondary" href="/api/employee-template" download="employee-import-template.xlsx">Download Excel template with current employees</a>
     <p className="field-help">Edit the template and upload it below. Blank cells keep existing values; type Unassigned to clear an optional field. Team shifts, rotations and date overrides take priority over a default shift. Photos and attendance stay.</p>

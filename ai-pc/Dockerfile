@@ -5,7 +5,8 @@ RUN npm ci --no-audit --no-fund
 COPY index.html vite.config.js ./
 COPY src ./src
 COPY public ./public
-RUN npm run build
+ARG APP_BUILD_REVISION=
+RUN APP_BUILD_REVISION="$APP_BUILD_REVISION" npm run build
 
 FROM python:3.12-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

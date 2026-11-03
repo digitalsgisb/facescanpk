@@ -4,6 +4,7 @@ import {PlantShiftControls,AutomaticClockout} from './plant-controls.jsx';
 import {plantTeams} from './plant-view.js';
 import {EmployeeImport} from './employee-import.jsx';
 import {employeeLocation} from './transfer-utils.js';
+import useAutoUpdates from './useAutoUpdates.js';
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {LayoutDashboard, Users, CalendarDays, Clock3, Settings2, Search, Plus, ArrowUpRight, ArrowDownToLine, ChevronRight, X, Check, LogOut, Radio, ShieldCheck, Monitor, AlertTriangle, Pencil, Archive, Sun, Moon, FileClock, Upload, RefreshCw, CheckCircle2, Camera, ListFilter, Activity, Copy, Cable, KeyRound, Menu} from 'lucide-react';
@@ -59,8 +60,10 @@ function Dialog({title,subtitle,children,onClose,wide=false}){
 function Field({label,children,wide=false}){return <label className={'field '+(wide?'span-two':'')}><span>{label}</span>{children}</label>}
 function App(){
   const pwa=usePwa();
-  const [auth,setAuth]=useState(null),[password,setPassword]=useState(''),[username,setUsername]=useState(''),[page,setPage]=useState('overview'),[state,setState]=useState(null),[sessions,setSessions]=useState([]),[review,setReview]=useState([]),[audit,setAudit]=useState([]);
+  const [auth,setAuth]=useState(null),[password,setPassword]=useState(''),[username,setUsername]=useState(''),[page,setPage]=useState(()=>{try{return sessionStorage.getItem('attendance-page')||'overview'}catch{return 'overview'}}),[state,setState]=useState(null),[sessions,setSessions]=useState([]),[review,setReview]=useState([]),[audit,setAudit]=useState([]);
   const [error,setError]=useState(''),[toast,setToast]=useState(''),[busy,setBusy]=useState(false),[live,setLive]=useState(false),[dialog,setDialog]=useState(null),[mobile,setMobile]=useState(false);
+  useEffect(()=>{try{sessionStorage.setItem('attendance-page',page)}catch{}},[page]);
+  const automaticUpdate=useAutoUpdates({activate:pwa.applyUpdate,blocked:!!dialog||busy||auth===null});
   const [search,setSearch]=useState(''),[department,setDepartment]=useState('all'),[team,setTeam]=useState('all'),[status,setStatus]=useState('all'),[showArchived,setShowArchived]=useState(false),[location,setLocation]=useState('all');
   const [section,setSection]=useState('all'),[officeDepartment,setOfficeDepartment]=useState('all');
   const [from,setFrom]=useState(today()),[to,setTo]=useState(today());
@@ -91,7 +94,7 @@ function App(){
     try{const [h,r]=await Promise.all([api(`/attendance?from=${from}&to=${to}`),api('/review')]);setSessions(h.sessions);setReview(r.events)}catch(e){setError(e.message)}
   },[from,to,auth?.role]);
   useEffect(()=>{if(!auth?.signed_in)setClockUnlocked(false)},[auth?.signed_in]);
-  useEffect(()=>{api('/auth/status').then(a=>{setAuth(a);if(a.role==='employee_admin'||a.base)setPage('employees')}).catch(e=>setError(e.message))},[]);
+  useEffect(()=>{api('/auth/status').then(a=>{setAuth(a);setPage(current=>a.role==='employee_admin'?'employees':a.base&&!['employees','clock','attendance','board','control','attention'].includes(current)?'employees':current)}).catch(e=>setError(e.message))},[]);
   useEffect(()=>{
     if(!auth?.signed_in)return;
     refresh();refreshHistory();
@@ -109,7 +112,7 @@ function App(){
     try{const r=await api(path,method,data);await refresh();await refreshHistory();if(message)notify(message);return r}finally{setBusy(false)}
   }
   async function safeAction(fn){try{await fn()}catch(e){setError(e.message)}}
-  async function login(e){e.preventDefault();setBusy(true);try{await api(auth.setup_required?'/auth/setup':'/auth/login','POST',{password,username});setPassword('');const signed=await api('/auth/status');setAuth(signed);if(signed.role==='employee_admin'||signed.base)setPage('employees');setError('')}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function login(e){e.preventDefault();setBusy(true);try{await api(auth.setup_required?'/auth/setup':'/auth/login','POST',{password,username});setPassword('');const signed=await api('/auth/status');setAuth(signed);setPage(current=>signed.role==='employee_admin'?'employees':signed.base&&!['employees','clock','attendance','board','control','attention'].includes(current)?'employees':current);setError('')}catch(e){setError(e.message)}finally{setBusy(false)}}
   const active=(state?.employees||[]).filter(e=>e.active);
   const inside=active.filter(e=>e.status==='IN');
   const unassigned=active.filter(e=>!e.effective_schedule);
@@ -141,7 +144,7 @@ function App(){
     {mobile&&<button className="sidebar-backdrop" aria-label="Close navigation" onClick={()=>setMobile(false)}/>}
     <aside id="workspace-sidebar" className={'sidebar '+(mobile?'open':'')}><button className="sidebar-close icon-button" aria-label="Close sidebar" onClick={()=>setMobile(false)}><X size={20}/></button><div className="brand"><img src="/1.png" alt="Sugihara company logo"/><div>Digital Attendance<small>attendance workspace</small></div></div><div className="site-label">WORKPLACE <span>{auth.base||'ALL'}</span></div><nav aria-label="Workspace navigation">{nav.map(([id,label,Icon])=><button key={id} className={page===id?'selected':''} onClick={()=>navigate(id)}><Icon size={19}/>{label}{(id==='employees'||id==='attention')&&<span className="nav-count">{id==='employees'?active.length:attentionSummary.total}</span>}</button>)}</nav><div className="sidebar-bottom"><button className="account" onClick={()=>safeAction(async()=>{await api('/auth/logout','POST');setAuth({signed_in:false,setup_required:false});setState(null)})}><span className="account-avatar">AD</span><div>Administrator<small>Manage workspace</small></div><LogOut size={17}/></button></div></aside>
     <main><header className="topbar"><div className="breadcrumbs"><button ref={navigationToggle} className="mobile-toggle icon-button" aria-label={mobile?"Close navigation":"Open navigation"} aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={()=>setMobile(!mobile)}><Menu size={20}/></button><span>{auth.base||'All plants'}</span><ChevronRight size={14}/><strong>{nav.find(n=>n[0]===page)?.[1]}</strong></div><div className="topbar-right"><AttendanceSound notifications={notifications}/><span className="timezone">MYT · UTC+8</span><span className="date-pill"><CalendarDays size={15}/>{dateLabel(today())}</span><div className="tiny-avatar">AD</div></div></header>
-    <div className="page" key={page}>
+    <div className="page" key={page}>{automaticUpdate&&<p role="status" className="integration-note">An update is ready. It installs automatically after your edits are saved and the screen is idle.</p>}
       {error&&<div className="error-banner"><AlertTriangle size={18}/>{error}<button className="icon-button" onClick={()=>setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
       <div className="page-heading"><div><div className="eyebrow">{page==='overview'?'WORKFORCE AT A GLANCE':'YOUR WORKPLACE'}</div><h1>{({overview:'Attendance overview',attention:'Needs attention',control:'Shifts',board:'Live board',clock:'Clock in / out',employees:'Employees',roster:'Working hours & roster',attendance:'Attendance log',audit:'History',settings:'Settings'})[page]}</h1><p>{({overview:'A clear picture of who’s here, across every shift.',attention:'Review in bulk or turn prompts off.',control:'Plant shifts and overtime.',board:'Choose a plant for the TV.',clock:'Admin attendance controls.',employees:'Profiles, teams and hours.',roster:'Team and date overrides.',attendance:'Every confirmed clock-in and clock-out, including overnight shifts.',audit:'Track employee edits, schedule changes and attendance corrections.',settings:'Connect your kiosks, tune attendance rules and protect your records.'})[page]}</p></div><div className="heading-actions">{page==='employees'&&<button className="primary" onClick={()=>setDialog({type:'employee'})}><Plus size={17}/>Add employee</button>}{page==='overview'&&<><button className="secondary" onClick={()=>navigate('attendance')}><FileClock size={17}/>View attendance log</button><button className="primary" onClick={()=>navigate('employees')}>Manage employees<ArrowUpRight size={17}/></button></>}{page==='attendance'&&<button className="primary" onClick={()=>setDialog({type:'correction',manual:true})}><Plus size={17}/>Manual entry</button>}{page==='roster'&&<button className="primary" onClick={()=>setDialog({type:'assignment'})}><Plus size={17}/>Assign working hours</button>}</div></div>
 

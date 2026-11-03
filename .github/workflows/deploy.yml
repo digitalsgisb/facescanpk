@@ -1,0 +1,55 @@
+name: Test and deploy Attendance
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm ci --prefix ai-pc
+      - run: node --test ai-pc/src/*.test.js
+      - run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r ai-pc/requirements.txt
+          cd ai-pc
+          ../.venv/bin/python -m unittest discover
+      - run: npm run build --prefix ai-pc
+      - run: bash -n tools/auto-deploy.sh
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.AUTO_DEPLOY_ENABLED == 'true'
+    runs-on: [self-hosted, linux, x64, production-digital]
+    timeout-minutes: 30
+    concurrency:
+      group: attendance-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+    steps:
+      - name: Update the existing AI PC checkout and rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_PATH" && test -d "$DEPLOY_PATH/.git"
+          cd "$DEPLOY_PATH"
+          test "$(git branch --show-current)" = main
+          test -z "$(git status --porcelain --untracked-files=no)"
+          git fetch origin main
+          if test "$(git rev-parse origin/main)" != "$GITHUB_SHA"; then
+            echo "A newer push superseded this deployment."
+            exit 0
+          fi
+          git merge --ff-only "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          bash tools/auto-deploy.sh "$PWD/ai-pc" attendance

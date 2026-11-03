@@ -1,3 +1,5 @@
+**Automatic deployment and device refresh:** see [AUTOMATIC-UPDATES.md](./AUTOMATIC-UPDATES.md).
+
 **Checksheet OT and shift-board connection:** see [CHECKSHEET-SHIFT-BOARD.md](./CHECKSHEET-SHIFT-BOARD.md) to drive employee cards from confirmed Checksheet shifts with a 15/30-minute grace period.
 
 # AI PC · React dashboard and attendance API
