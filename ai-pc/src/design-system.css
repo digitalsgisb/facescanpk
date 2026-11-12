@@ -168,7 +168,7 @@ input[type=checkbox],.clock-admin input[type=checkbox]{accent-color:var(--accent
 .inline-error,.error-banner{background:var(--out-soft);border-color:oklch(0.9 0.05 22);color:var(--out-ink);font-size:var(--t-md);border-radius:var(--r-1)}
 .toast{left:50%;bottom:calc(24px + var(--tabbar-h) + env(safe-area-inset-bottom));background:var(--ink-1);color:oklch(1 0 0);font-size:var(--t-md);border-radius:99px;padding:11px 18px;box-shadow:var(--shadow-2);animation:ds-toast var(--dur-3) var(--ease-out) both}
 .toast svg{color:var(--in)}
-@media(min-width:651px){.toast{left:calc(50% + 121px)}.topbar .breadcrumbs{visibility:hidden}}
+@media(min-width:651px){.toast{left:calc(50% + 121px)}}
 
 /* ---------- Overview ---------- */
 .stats-grid{gap:14px;margin-bottom:20px}
@@ -339,12 +339,54 @@ tbody tr:hover{background:var(--surface-2)}
 .redesigned-board .board-group .tv-employee.out{background:var(--out)}
 .board-header .badge.amber{background:var(--warn);color:oklch(0.25 0.05 80)}
 
+/* ---------- Directory (header path) ---------- */
+.directory ol{display:flex;align-items:center;gap:2px;list-style:none;margin:0;padding:0;font-size:var(--t-md);min-width:0}
+.directory li{display:flex;align-items:center;position:relative;min-width:0}
+.directory button{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:99px;color:var(--shell-ink);font-size:inherit;white-space:nowrap}
+.directory button:hover:not(:disabled){background:oklch(1 0 0 / .10);color:oklch(1 0 0)}
+.directory button:disabled{opacity:1;cursor:default}
+.directory-section span{padding:6px 4px;color:var(--shell-muted);white-space:nowrap}
+.directory-sep{color:var(--shell-muted);opacity:.7}
+.directory-current>button{font-weight:600;color:oklch(1 0 0);font-size:var(--t-lg)}
+.directory-current>button svg{color:var(--shell-muted);transition:transform var(--dur-2) var(--ease-out)}
+.directory-current>button svg.flipped{transform:rotate(180deg)}
+.directory-menu{position:absolute;top:calc(100% + 10px);left:0;min-width:210px;margin:0;padding:6px;list-style:none;border-radius:var(--r-2);transform-origin:top left;animation:ds-menu var(--dur-2) var(--ease-out) both;z-index:60}
+.directory-menu li{display:block;animation:ds-rise var(--dur-2) var(--ease-out) both;animation-delay:calc(var(--i,0)*28ms)}
+.directory-menu button{width:100%;justify-content:flex-start;gap:10px;padding:10px 12px;border-radius:var(--r-1);font-size:var(--t-md);color:var(--shell-ink)}
+.directory-menu button.selected{background:oklch(1 0 0 / .14);color:oklch(1 0 0);font-weight:600}
+.directory-menu button svg{color:var(--shell-muted)}
+@keyframes ds-menu{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:none}}
+
+/* ---------- Liquid glass ----------
+   Used only where content scrolls underneath: header, menus, sticky bars, tab bar, toast.
+   A blurred, saturated backdrop plus a thin specular edge reads as glass; solid fallbacks follow. */
+.glass,.topbar,.tabbar,.toast,.department-navigator,.clock-batch-bar{
+  -webkit-backdrop-filter:blur(18px) saturate(170%);backdrop-filter:blur(18px) saturate(170%);
+}
+.topbar{background:oklch(0.19 0.01 260 / .62);border-bottom:1px solid oklch(1 0 0 / .10);box-shadow:inset 0 1px 0 oklch(1 0 0 / .14),0 8px 28px oklch(0.1 0.01 260 / .18)}
+.topbar::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,oklch(1 0 0 / .10),transparent 55%)}
+.topbar>*{position:relative;z-index:1}
+.glass{background:oklch(0.24 0.012 260 / .8);border:1px solid oklch(1 0 0 / .16);box-shadow:inset 0 1px 0 oklch(1 0 0 / .22),0 18px 44px oklch(0.1 0.01 260 / .35)}
+.toast{background:oklch(0.22 0.01 260 / .72);border:1px solid oklch(1 0 0 / .16);box-shadow:inset 0 1px 0 oklch(1 0 0 / .2),0 14px 36px oklch(0.1 0.01 260 / .3)}
+.department-navigator,.clock-batch-bar{background:oklch(1 0 0 / .66);border:1px solid oklch(1 0 0 / .7);box-shadow:inset 0 1px 0 oklch(1 0 0 / .9),0 8px 26px oklch(0.2 0.01 260 / .10)}
+.attendance-notice{-webkit-backdrop-filter:blur(18px) saturate(170%);backdrop-filter:blur(18px) saturate(170%);background:oklch(1 0 0 / .78);border:1px solid oklch(1 0 0 / .8);box-shadow:inset 0 1px 0 oklch(1 0 0),var(--shadow-2)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .topbar{background:var(--shell)}.glass,.toast{background:var(--shell-2)}.department-navigator,.clock-batch-bar,.attendance-notice{background:var(--surface)}
+}
+@media(prefers-reduced-transparency:reduce){
+  .glass,.topbar,.tabbar,.toast,.department-navigator,.clock-batch-bar,.attendance-notice{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .topbar{background:var(--shell)}.glass,.toast{background:var(--shell-2)}.department-navigator,.clock-batch-bar,.attendance-notice,.tabbar{background:var(--surface)}
+}
+
 /* ---------- Mobile tab bar ---------- */
 .tabbar{display:none}
 @media(max-width:650px){
-  :root{--tabbar-h:60px;--t-xs:12px;--t-sm:13px;--t-md:14px;--t-lg:16px}
-  .tabbar{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;flex-direction:row;gap:0;position:fixed;left:0;right:0;bottom:0;z-index:44;background:var(--surface);border-top:1px solid var(--line);padding:0 4px env(safe-area-inset-bottom);box-shadow:0 -4px 20px oklch(0.2 0.01 260 / .06)}
-  .tabbar button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:var(--tabbar-h);padding:0;border-radius:0;font-size:11px;font-weight:550;color:var(--ink-3);text-align:center;background:none;box-shadow:none}
+  :root{--tabbar-h:76px;--t-xs:12px;--t-sm:13px;--t-md:14px;--t-lg:16px}
+  .tabbar{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;flex-direction:row;gap:0;position:fixed;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:44;background:oklch(1 0 0 / .68);border:1px solid oklch(1 0 0 / .75);border-radius:22px;padding:0 4px;box-shadow:inset 0 1px 0 oklch(1 0 0 / .95),0 10px 32px oklch(0.2 0.01 260 / .18);overflow:hidden}
+  .directory-root,.directory-section,.directory>ol>.directory-sep{display:none}
+  .directory-current>button{font-size:var(--t-lg)}
+  .directory-menu{left:0;min-width:230px}
+  .tabbar button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:60px;padding:0;border-radius:0;font-size:11px;font-weight:550;color:var(--ink-3);text-align:center;background:none;box-shadow:none}
   .tabbar button:hover{background:none}
   .tabbar button.selected{color:var(--accent);background:none;box-shadow:none;font-weight:650}
   .tabbar button.selected::before{content:'';position:absolute;top:0;left:50%;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--accent);transform:translateX(-50%);animation:ds-fade var(--dur-2) var(--ease-out)}
