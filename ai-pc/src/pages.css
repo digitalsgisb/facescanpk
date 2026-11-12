@@ -131,3 +131,5 @@
 .nav-leaf .nav-pill{inset:0}
 .sidebar nav .nav-leaf-flat{min-height:46px;padding:8px 12px;font-size:var(--t-md);font-weight:550}
 @media(prefers-reduced-motion:reduce){.nav-sub{transition:none}}
+/* Keyboard focus on the dark sidebar uses a soft light ring instead of the maroon accent. */
+.sidebar :focus-visible{outline:2px solid oklch(1 0 0 / .55);outline-offset:-2px}
