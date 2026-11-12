@@ -25,7 +25,7 @@ export function PlantShiftControls({state,api,onRefresh,navigate}){
 export function AutomaticClockout({api}){
   const [config,setConfig]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   useEffect(()=>{api('/automatic-clockout').then(setConfig).catch(e=>setMessage(e.message))},[]);
-  return <details className="card form-pad daily-clockout"><summary>Daily clock-out · All plants</summary>
+  return <section className="card form-pad daily-clockout">
     {config&&<form className="form-grid" onSubmit={async e=>{e.preventDefault();setBusy(true);setMessage('');try{await api('/automatic-clockout','PUT',{enabled:config.enabled,clock_time:config.clock_time});setConfig(await api('/automatic-clockout'));setMessage('Saved. Runs on the AI PC.')}catch(error){setMessage(error.message)}finally{setBusy(false)}}}>
       <label className="checkbox-label"><input type="checkbox" checked={config.enabled} disabled={busy} onChange={e=>setConfig({...config,enabled:e.target.checked})}/>Enabled</label>
       <label>Malaysia time<input type="time" required value={config.clock_time} disabled={busy} onChange={e=>setConfig({...config,clock_time:e.target.value})}/></label>
@@ -34,5 +34,5 @@ export function AutomaticClockout({api}){
       <button className="secondary" type="button" disabled={busy} onClick={async()=>{setBusy(true);try{const latest=await api('/automatic-clockout');setConfig(c=>({...c,last_run:latest.last_run}))}catch(error){setMessage(error.message)}finally{setBusy(false)}}}>Refresh status</button>
       {config.last_run&&<small>Last run: {config.last_run.run_date} · {config.last_run.closed} clocked out.</small>}
     </form>}{message&&<p role="status">{message}</p>}
-  </details>;
+  </section>;
 }
