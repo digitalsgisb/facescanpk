@@ -34,6 +34,7 @@ import './layout-editor.css';
 import {ShellSkeleton,Tick} from './skeleton.jsx';
 import {Disclosure,transition} from './ui-kit.jsx';
 import {Directory} from './directory.jsx';
+import {SidebarNav} from './sidebar-nav.jsx';
 import './design-system.css';
 import './pages.css';
 
@@ -150,7 +151,7 @@ function App(){
   if(!state)return <ShellSkeleton error={error}/>;
   return <div className="app-shell">
     {mobile&&<button className="sidebar-backdrop" aria-label="Close navigation" onClick={()=>setMobile(false)}/>}
-    <aside id="workspace-sidebar" className={'sidebar '+(mobile?'open':'')}><button className="sidebar-close icon-button" aria-label="Close sidebar" onClick={()=>setMobile(false)}><X size={20}/></button><div className="brand"><img src="/1.png" alt="Sugihara company logo"/><div>Digital Attendance</div></div><nav aria-label="Workspace navigation">{nav.map(([id,label,Icon])=><button key={id} className={page===id?'selected':''} aria-current={page===id?'page':undefined} onClick={()=>navigate(id)}>{page===id&&<span className="nav-pill"/>}<Icon size={19}/>{label}{id==='attention'&&attentionSummary.total>0&&<span className="nav-count alert"><Tick value={attentionSummary.total}/></span>}</button>)}</nav><div className="sidebar-bottom"><button className="account" onClick={()=>safeAction(async()=>{await api('/auth/logout','POST');setAuth({signed_in:false,setup_required:false});setState(null)})}><LogOut size={17}/>Sign out</button></div></aside>
+    <aside id="workspace-sidebar" className={'sidebar '+(mobile?'open':'')}><button className="sidebar-close icon-button" aria-label="Close sidebar" onClick={()=>setMobile(false)}><X size={20}/></button><div className="brand"><img src="/1.png" alt="Sugihara company logo"/><div>Digital Attendance</div></div><nav aria-label="Workspace navigation"><SidebarNav nav={nav} page={page} onNavigate={navigate} alerts={attentionSummary.total}/></nav><div className="sidebar-bottom"><button className="account" onClick={()=>safeAction(async()=>{await api('/auth/logout','POST');setAuth({signed_in:false,setup_required:false});setState(null)})}><LogOut size={17}/>Sign out</button></div></aside>
     <main><header className="topbar"><div className="breadcrumbs"><button ref={navigationToggle} className="mobile-toggle icon-button" aria-label={mobile?"Close navigation":"Open navigation"} aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={()=>setMobile(!mobile)}><Menu size={20}/></button><Directory root={auth.base||'All plants'} page={page} nav={nav} onNavigate={navigate}/></div><div className="topbar-right"><AttendanceSound notifications={notifications}/><span className={'connection '+(live?'is-live':'')} role="status"><span className={'dot '+(live?'green':'amber')}/><span>{live?'Live':'Reconnecting…'}</span></span><span className="date-pill">{dateLabel(today())}</span></div></header>
     <div className="page" key={page}>{automaticUpdate&&<p role="status" className="integration-note">An update is ready. It installs automatically after your edits are saved and the screen is idle.</p>}
       {error&&<div className="error-banner"><AlertTriangle size={18}/>{error}<button className="icon-button" onClick={()=>setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
