@@ -13,7 +13,7 @@ export default function FaceRegistration({employees,exportCsv}){
     catch{setMessage('Copy unavailable in this browser. Use Export CSV.')}
   };
   return <section className="card"><div className="section-heading"><div><h2>Face registration</h2><p>Registration reported by the attendance kiosks. Profile photos are separate.</p></div></div>
-    <div className="form-pad"><p>{active.filter(e=>e.face_registration==='pending').length} pending · {active.filter(e=>e.face_registration==='registered').length} registered · {active.filter(e=>!e.face_registration||e.face_registration==='unknown').length} unknown</p>
+    <div className="form-pad"><p className="face-summary"><span><b>{active.filter(e=>e.face_registration==='pending').length}</b>pending</span><span><b>{active.filter(e=>e.face_registration==='registered').length}</b>registered</span><span><b>{active.filter(e=>!e.face_registration||e.face_registration==='unknown').length}</b>unknown</span></p>
       <div className="filters"><select aria-label="Face registration status" value={status} onChange={e=>{setStatus(e.target.value);setMessage('')}}>{Object.entries(label).map(([key,text])=><option key={key} value={key}>{text}</option>)}</select>
         <input aria-label="Search face registration list" placeholder="Search name, ID, plant, department or line" value={search} onChange={e=>setSearch(e.target.value)}/>
         <button className="secondary" disabled={!rows.length} onClick={()=>exportCsv(rows.map(e=>({ID:e.id,Name:e.name,Plant:e.base||'',Department:e.department,Line:e.line,Team:e.team,FaceRegistration:label[status],LastReport:e.face_reported_at||''})),'face-registration-'+status+'.csv')}>Export CSV</button>

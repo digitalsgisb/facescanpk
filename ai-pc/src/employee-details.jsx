@@ -20,7 +20,7 @@ export function EmployeeDetails({employee, onClose}) {
   useEffect(() => setBroken(false), [employee?.photo_url]);
   if (!employee) return null;
   const details = [
-    ['Employee ID', employee.id], ['Plant / location', employee.base || 'Unassigned'], ['Company', employee.company || 'Unassigned'], ['Department', employee.department || 'Unassigned'],
+    ['Employee ID', employee.id], ['Department', employee.department || 'Unassigned'],
     ...(productionSection(employee)?[['Production section',productionSection(employee)]]:[]),
     ...(employee.department?.trim().toUpperCase()==='OFFICE'?[['Office department',employee.office_department||'Unassigned']]:[]),
     ['Production line', employee.line || 'Unassigned'], ['Position', employee.position || 'Unassigned'],
@@ -29,7 +29,7 @@ export function EmployeeDetails({employee, onClose}) {
   ];
   return createPortal(<div className="modal-backdrop" onMouseDown={event => {if(event.target === event.currentTarget) onClose();}}>
     <section className="modal" role="dialog" aria-modal="true" aria-label="Employee details">
-      <header><div><h2>Employee details</h2><p>Live board · View only</p></div><button className="icon-button" autoFocus aria-label="Close employee details" onClick={onClose}><X size={20}/></button></header>
+      <header><div><h2>Employee details</h2></div><button className="icon-button" autoFocus aria-label="Close employee details" onClick={onClose}><X size={20}/></button></header>
       <div className="employee-details-body"><div className="employee-profile"><div className="avatar large">{employee.photo_url && !broken ? <img src={employee.photo_url} alt="" onError={() => setBroken(true)}/> : (employee.nickname || employee.name).split(' ').filter(Boolean).slice(0,2).map(part => part[0]).join('')}</div><div><strong>{employee.nickname || employee.name}</strong><small>{employee.name}</small><span className={'badge ' + (employee.status === 'IN' ? 'green' : 'red')}>{employee.status === 'IN' ? 'Clocked in' : 'Clocked out'}</span></div></div>
       <dl className="employee-readonly-details">{details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></div>
       <footer className="modal-footer"><div className="spacer"/><button className="secondary" onClick={onClose}>Close</button></footer>
