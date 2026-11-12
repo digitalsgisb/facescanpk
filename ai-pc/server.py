@@ -21,6 +21,7 @@ import ssl
 import employee_admin
 import testing_operations
 import plant_workflows
+import checksheet_shifts
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone, date
 from http.cookies import SimpleCookie
@@ -173,6 +174,7 @@ class Store:
             employee_admin.migrate(db)
             testing_operations.migrate(db)
             plant_workflows.migrate(db)
+            checksheet_shifts.migrate(db)
             columns={r['name'] for r in db.execute('PRAGMA table_info(employees)')}
             for column in ('production_section','office_department','checksheet_group','company','base','employment_department','job_type'):
                 if column not in columns:
@@ -338,7 +340,7 @@ class Store:
             e['status'] = 'IN' if e['session'] else 'OUT'
             e['stale_session'] = bool(e['session'] and (datetime.now(KL)-stamp(e['session']['time_in'])).total_seconds()>self.settings(db)['max_open_hours']*3600)
             result.append(e)
-        return attendance_maintenance.decorate_enrollment(db, result)
+        return checksheet_shifts.decorate(db, attendance_maintenance.decorate_enrollment(db, result))
 
     def scan(self, data, device, dashboard=False, skip_unchanged=False):
         event_id = data.get('event_id', '')
@@ -468,7 +470,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(raw)))
-        self.send_header('Cache-Control', 'no-store' if self.path.startswith(('/api','/uploads/')) else 'no-cache')
+        self.send_header('Cache-Control', 'no-store' if self.path.startswith(('/api','/uploads/','/app-version.json')) else 'no-cache')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Frame-Options', 'DENY')
         self.send_header('Referrer-Policy', 'same-origin')
@@ -916,7 +918,7 @@ class Handler(BaseHTTPRequestHandler):
                 return {'employees':employees,'plant':plant,'schedules':[plant_workflows.schedule(db,r['id'],plant) for r in db.execute('SELECT id FROM schedules')],
                         'assignments':[],'settings':settings,'devices':[],
                         'recent_events':[],'revision':self.store.revision,'time':now_iso()}
-        return {'employees':employees,'plant':plant,'review_enabled':plant_workflows.review_enabled(db,plant),'attention_summary':self.store.attention_summary(db,employees,plant),
+        return {'employees':employees,'plant':plant,'checksheet_sync':checksheet_shifts.status(db),'review_enabled':plant_workflows.review_enabled(db,plant),'attention_summary':self.store.attention_summary(db,employees,plant),
                 'board_layouts':{base:plant_workflows.board_layout(db,base) for base in ({plant} if plant else {''}|{e.get('base','') for e in employees}|{r['base'] for r in db.execute('SELECT base FROM board_layouts')})},
                 'plant_controls':{base:plant_workflows.controls(self.store,db,base)['settings'] for base in {e.get('base','') for e in employees}},
                 'plant_templates':{base:[plant_workflows.schedule(db,r['id'],base) for r in db.execute('SELECT id FROM schedules')] for base in {e.get('base','') for e in employees}},
@@ -1309,6 +1311,7 @@ if __name__=='__main__':
         server.is_tls=True
     clockout_stop,clockout_thread=plant_workflows.start_clockout_worker(server.store)
     normal_stop,normal_thread=attendance_maintenance.start_worker(server.store)
+    checksheet_stop,checksheet_thread=checksheet_shifts.start_worker(server.store)
     backup_stop=threading.Event()
     def daily_backup():
         while not backup_stop.is_set():
@@ -1327,5 +1330,6 @@ if __name__=='__main__':
     except KeyboardInterrupt:
         backup_stop.set()
         normal_stop.set()
+        checksheet_stop.set()
         clockout_stop.set()
         server.server_close()

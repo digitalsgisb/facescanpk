@@ -5,7 +5,8 @@ RUN npm ci --no-audit --no-fund
 COPY index.html vite.config.js ./
 COPY src ./src
 COPY public ./public
-RUN npm run build
+ARG APP_BUILD_REVISION=
+RUN APP_BUILD_REVISION="$APP_BUILD_REVISION" npm run build
 
 FROM python:3.12-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
@@ -15,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     groupadd --gid 10001 attendance && \
     useradd --uid 10001 --gid attendance --no-create-home attendance && \
     mkdir -p /app/runtime /app/data && chown attendance:attendance /app/runtime
-COPY employee_spreadsheet.py employee_export.py server.py manage.py employee_admin.py testing_operations.py plant_workflows.py attendance_maintenance.py ./
+COPY employee_spreadsheet.py employee_export.py server.py manage.py employee_admin.py testing_operations.py plant_workflows.py attendance_maintenance.py checksheet_shifts.py ./
 COPY data/employees.example.json ./data/employees.example.json
 COPY --from=frontend /build/dist ./dist
 USER attendance

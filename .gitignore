@@ -19,3 +19,5 @@ ai-pc/data/photo-import-report.json
 **/*.pem
 **/*.key
 **/*.log
+
+**/.venv/

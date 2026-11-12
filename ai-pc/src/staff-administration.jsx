@@ -6,7 +6,7 @@ export function StaffAdministration({api}) {
   const refresh=()=>api('/staff').then(r=>setStaff(r.staff));
   useEffect(()=>{refresh().catch(e=>setMessage(e.message))},[]);
   async function run(action){setBusy(true);setMessage('');try{await action()}catch(e){setMessage(e.message)}finally{setBusy(false)}}
-  return <section className="card staff-administration">
+  return <section className="card staff-administration" data-update-blocked={!!username || !!password || busy}>
     <header className="staff-heading"><div><h2>Staff access</h2><p>Manage accounts and plant permissions.</p></div><span className="staff-count">{staff.filter(s=>s.active).length} active</span></header>
     <div className="staff-accounts">{staff.map(s=><article className="staff-account" key={s.username}>
       <div className="staff-account-info"><strong>{s.username}</strong><small>{s.role==='admin'?'Administrator':'Employee administrator'} · {s.base||'All plants'}</small></div>

@@ -92,7 +92,7 @@ function AttendanceNotice({event, dismiss}) {
   const name = employee.nickname || employee.name || employee.id;
   const Icon = clockedIn ? LogIn : LogOut;
   return <article className={'attendance-notice ' + (clockedIn ? 'is-in' : 'is-out')}>
-    <button className="attendance-notice-dismiss" onClick={dismiss} aria-label="Dismiss attendance notification"><X size={17}/></button>
+    <div className="attendance-notice-heading"><span><Bell size={15}/> LIVE ATTENDANCE</span><button onClick={dismiss} aria-label="Dismiss attendance notification"><X size={17}/></button></div>
     <div className="attendance-notice-person"><div className="attendance-notice-photo">{employee.photo_url && !broken ? <img src={employee.photo_url} alt="" onError={() => setBroken(true)}/> : name.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('')}</div><div><strong>{name}</strong><small>{[employee.department, employee.line].filter(Boolean).join(' · ') || employee.id}</small></div></div>
     <div className="attendance-notice-result"><span><Icon size={19}/>{clockedIn ? 'Clocked in' : 'Clocked out'}</span><time dateTime={event.occurred_at}>{timeLabel(event.occurred_at)} <small>MYT</small></time></div>
     <div className="attendance-notice-progress"/>

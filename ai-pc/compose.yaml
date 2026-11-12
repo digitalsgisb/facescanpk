@@ -6,6 +6,11 @@ services:
     user: "${ATTENDANCE_UID:-1000}:${ATTENDANCE_GID:-1000}"
     ports:
       - "${ATTENDANCE_BIND:-0.0.0.0}:${ATTENDANCE_PORT:-3800}:8765"
+    environment:
+      CHECKSHEET_API_URL: ${CHECKSHEET_API_URL:-}
+      CHECKSHEET_SHIFT_FEED_TOKEN: ${CHECKSHEET_SHIFT_FEED_TOKEN:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
     volumes:
       - ./runtime:/app/runtime
       - ./data:/app/data:ro

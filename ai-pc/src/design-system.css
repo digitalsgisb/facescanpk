@@ -343,7 +343,7 @@ tbody tr:hover{background:var(--surface-2)}
 .tabbar{display:none}
 @media(max-width:650px){
   :root{--tabbar-h:60px;--t-xs:12px;--t-sm:13px;--t-md:14px;--t-lg:16px}
-  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);flex-direction:row;gap:0;position:fixed;left:0;right:0;bottom:0;z-index:44;background:var(--surface);border-top:1px solid var(--line);padding:0 4px env(safe-area-inset-bottom);box-shadow:0 -4px 20px oklch(0.2 0.01 260 / .06)}
+  .tabbar{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;flex-direction:row;gap:0;position:fixed;left:0;right:0;bottom:0;z-index:44;background:var(--surface);border-top:1px solid var(--line);padding:0 4px env(safe-area-inset-bottom);box-shadow:0 -4px 20px oklch(0.2 0.01 260 / .06)}
   .tabbar button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:var(--tabbar-h);padding:0;border-radius:0;font-size:11px;font-weight:550;color:var(--ink-3);text-align:center;background:none;box-shadow:none}
   .tabbar button:hover{background:none}
   .tabbar button.selected{color:var(--accent);background:none;box-shadow:none;font-weight:650}
