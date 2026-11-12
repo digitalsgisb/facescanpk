@@ -3,7 +3,7 @@ import {ChevronDown,LayoutDashboard,Clock3,Users,Settings2} from 'lucide-react';
 import {SECTIONS} from './directory.jsx';
 import {Tick} from './skeleton.jsx';
 
-const ICONS={Today:LayoutDashboard,Attendance:Clock3,People:Users,Setup:Settings2};
+const ICONS={Dashboard:LayoutDashboard,Attendance:Clock3,People:Users,Setup:Settings2};
 const KEY='attendance-nav-open';
 
 // Sidebar menu: each section is a parent row that folds open to its pages, drawn under a thin guide line.

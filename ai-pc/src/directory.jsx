@@ -2,7 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {ChevronRight,ChevronDown,Home} from 'lucide-react';
 
 // Where each page lives. The header shows "plant › section › page", and the page crumb opens its siblings.
-export const SECTIONS=[['Today',['overview','attention','board']],['Attendance',['clock','attendance','audit']],['People',['employees']],['Setup',['control','roster','settings']]];
+export const SECTIONS=[['Dashboard',['overview','attention','board']],['Attendance',['clock','attendance','audit']],['People',['employees']],['Setup',['control','roster','settings']]];
 
 export function Directory({root,page,nav,onNavigate}){
   const [open,setOpen]=useState(false),box=useRef(null);
