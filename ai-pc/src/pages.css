@@ -1,0 +1,133 @@
+/* Page layer: roomy main features, folding secondary sections, crossfading status changes and shared-element transitions. */
+
+/* ---------- Spacing: the main feature gets the room, everything else stays compact ---------- */
+.page{display:flex;flex-direction:column;gap:28px;padding:36px 44px 64px}
+.page>*{margin-top:0;margin-bottom:0;min-width:0}
+.page>.page-heading{margin-bottom:0}
+.page-heading h1{font-size:28px}
+.stats-grid{gap:20px}
+.stat,.green-stat,.amber-stat{padding:22px 24px}
+.stat-value,.green-stat .stat-value{font-size:38px}
+.overview-grid{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:28px;align-items:start}
+.feature .section-heading{padding:28px 34px}
+.feature .section-heading h2{font-size:19px}
+.feature .department-list{padding:4px 34px 12px}
+.feature .department-row{padding:22px 0}
+.feature .dept-info strong{font-size:var(--t-lg)}
+.feature .progress{height:8px;margin-top:12px}
+.feature .dept-count b{font-size:20px}
+.feature th{padding:14px 28px}
+.feature td{padding:20px 28px}
+.feature .filters{padding:22px 28px;gap:14px}
+.employee-card.feature>.tabs-row{padding:0 30px}
+.section-label{margin-bottom:20px}
+.section-label h2{font-size:21px}
+.section-label p{font-size:var(--t-md);color:var(--ink-3);margin-top:6px}
+.schedule-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:18px;margin-bottom:0}
+.feature .schedule-card{padding:26px}
+.feature .schedule-time{font-size:24px;margin:14px 0}
+.attendance-notice{border-radius:var(--r-3)}
+
+/* ---------- Dropdown sections ---------- */
+.disclosure{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-2);box-shadow:var(--shadow-1);overflow:hidden}
+.disclosure-head{margin:0;font:inherit;letter-spacing:0}
+.disclosure-head button{display:flex;align-items:center;gap:14px;width:100%;padding:15px 22px;text-align:left;border-radius:0;min-height:56px}
+.disclosure-head button:hover{background:var(--surface-2)}
+.disclosure.is-open>.disclosure-head button{border-bottom:1px solid var(--line)}
+.disclosure-title{flex:1;min-width:0;display:grid;gap:2px}
+.disclosure-title strong{font-size:var(--t-lg);font-weight:600;color:var(--ink-1)}
+.disclosure-title small{font-size:var(--t-sm);color:var(--ink-3)}
+.disclosure-badge{min-width:26px;padding:2px 9px;border-radius:99px;background:var(--surface-3);color:var(--ink-2);font-size:var(--t-xs);font-weight:650;text-align:center;font-variant-numeric:tabular-nums}
+.disclosure-chevron{flex-shrink:0;color:var(--ink-3);transition:transform var(--dur-3) var(--ease-out)}
+.disclosure.is-open .disclosure-chevron{transform:rotate(180deg)}
+.disclosure-panel{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows var(--dur-3) var(--ease-out),opacity var(--dur-2) var(--ease-out)}
+.disclosure.is-open>.disclosure-panel{grid-template-rows:1fr;opacity:1}
+.disclosure-body{min-height:0;overflow:hidden}
+.disclosure:not(.is-open) .disclosure-body{visibility:hidden;transition:visibility 0s linear var(--dur-3)}
+.disclosure-foot{display:flex;gap:10px;align-items:center;padding:16px 22px;border-top:1px solid var(--line)}
+/* Components that bring their own card and heading sit flush inside the dropdown. */
+.disclosure-body>.card,.disclosure-body>section.card,.disclosure-body>details.card{border:0;border-radius:0;box-shadow:none;background:transparent;margin:0;overflow:visible}
+.disclosure-body>.card>.section-heading,.disclosure-body>.card>h2:first-child,.disclosure-body>.card>h3:first-child,.disclosure-body>.card>.staff-heading{display:none}
+.disclosure-body>.pwa-panel>.section-heading{display:block;padding-bottom:0;border:0}
+.disclosure-body>.pwa-panel .section-heading h2{display:none}
+.disclosure-body>.table-wrap{border-top:0}
+.disclosure-body .device-row{padding:16px 22px}
+.disclosure-body .timeline{padding:0 22px}
+.disclosure-body .priority-list{padding:20px 24px}
+.disclosure-body .review-row{padding:16px 22px}
+.disclosure-body .backup-content{padding:22px;align-items:flex-start;text-align:left}
+.disclosure-body>.empty{min-height:150px}
+.disclosure-body>.form-pad{padding:22px}
+
+/* ---------- Crossfade between two states (icon + label), with blur ---------- */
+.morph{display:inline-grid;vertical-align:middle;position:relative}
+.morph-layer{grid-area:1/1;display:inline-flex;align-items:center;justify-content:center;gap:.4em;white-space:nowrap}
+.morph-in{animation:morph-in var(--dur-3) var(--ease-out) both}
+.morph-out{animation:morph-out var(--dur-2) var(--ease-out) both;pointer-events:none}
+@keyframes morph-in{from{opacity:0;filter:blur(6px);transform:scale(.86)}to{opacity:1;filter:blur(0);transform:none}}
+@keyframes morph-out{from{opacity:1;filter:blur(0);transform:none}to{opacity:0;filter:blur(6px);transform:scale(.86)}}
+.staff-status,.staff-actions .quick-clock,.clock-in-action,.clock-out-action{transition:background-color var(--dur-3) var(--ease-out),color var(--dur-3) var(--ease-out),border-color var(--dur-3) var(--ease-out),transform var(--dur-1) var(--ease-out)}
+.clock-person .clock-in-action,.clock-person .clock-out-action{min-width:128px;display:inline-flex;align-items:center;justify-content:center}
+.staff-actions .quick-clock{display:flex}
+
+/* ---------- Shared-element transitions: the active highlight slides, pages morph ---------- */
+.sidebar nav button{isolation:isolate}
+.sidebar nav button.selected,.sidebar nav button.selected:hover{background:transparent;box-shadow:none}
+.nav-pill{position:absolute;inset:0;z-index:-1;border-radius:var(--r-1);background:oklch(1 0 0 / .14);box-shadow:inset 0 1px 0 oklch(1 0 0 / .12);view-transition-name:nav-pill}
+.sidebar nav button.selected svg{color:var(--accent-on-dark)}
+.tab-pill{position:absolute;inset:7px 6px;z-index:-1;border-radius:16px;background:oklch(0.41 0.14 25 / .10);view-transition-name:tab-pill}
+.tabbar button{isolation:isolate}
+.tabbar button.selected::before{content:none}
+.page{view-transition-name:page}
+.modal{view-transition-name:dialog}
+::view-transition-group(*){animation-duration:.34s;animation-timing-function:cubic-bezier(.16,1,.3,1)}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.2s;animation-timing-function:ease-out}
+::view-transition-old(page){animation:vt-out .16s ease-out both}
+::view-transition-new(page){animation:vt-in .34s cubic-bezier(.16,1,.3,1) both}
+::view-transition-old(dialog){animation:vt-out .16s ease-out both}
+::view-transition-new(dialog){animation:vt-pop .32s cubic-bezier(.16,1,.3,1) both}
+@keyframes vt-out{to{opacity:0;filter:blur(6px);transform:translateY(-6px)}}
+@keyframes vt-in{from{opacity:0;filter:blur(8px);transform:translateY(12px)}}
+@keyframes vt-pop{from{opacity:0;filter:blur(8px);transform:translateY(14px) scale(.97)}}
+
+@media(max-width:650px){
+  .page{gap:20px;padding:16px 16px 28px}
+  .feature .section-heading{padding:20px}
+  .feature .department-list{padding:0 20px 8px}
+  .overview-grid{grid-template-columns:1fr;gap:20px}
+  .disclosure-head button{padding:14px 16px;min-height:60px}
+  .disclosure-foot{padding:14px 16px}
+  .disclosure-body .device-row,.disclosure-body .review-row{padding:14px 16px}
+  .clock-person .clock-in-action,.clock-person .clock-out-action{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){
+  ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}
+  .morph-in,.morph-out{animation:none}.morph-out{display:none}
+  .disclosure-panel{transition:none}
+}
+
+/* ---------- Sidebar: sections that fold open to their pages ---------- */
+.sidebar nav{gap:4px}
+.nav-group{display:grid;border-radius:var(--r-2)}
+.sidebar nav .nav-parent{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:46px;padding:8px 8px 8px 12px;border-radius:var(--r-2);font-size:var(--t-md);font-weight:550;color:var(--shell-ink);text-align:left}
+.sidebar nav .nav-parent:hover{background:oklch(1 0 0 / .07);color:oklch(1 0 0)}
+.nav-parent>span:first-of-type{flex:1;min-width:0}
+.nav-group.has-active>.nav-parent{background:oklch(1 0 0 / .09);color:oklch(1 0 0);box-shadow:inset 0 1px 0 oklch(1 0 0 / .08)}
+.nav-group.has-active>.nav-parent svg:first-child{color:var(--accent-on-dark)}
+.nav-chevron{display:grid;place-items:center;width:30px;height:30px;border-radius:var(--r-1);background:oklch(1 0 0 / .08);color:var(--shell-ink);flex-shrink:0}
+.nav-chevron svg{transition:transform var(--dur-3) var(--ease-out)}
+.nav-group.is-open .nav-chevron svg{transform:rotate(180deg)}
+.nav-sub{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows var(--dur-3) var(--ease-out),opacity var(--dur-2) var(--ease-out)}
+.nav-group.is-open>.nav-sub{grid-template-rows:1fr;opacity:1}
+.nav-sub>ul{min-height:0;overflow:hidden;list-style:none;margin:0 0 0 26px;padding:2px 0 0 0;border-left:1px solid oklch(1 0 0 / .14)}
+.nav-group.is-open>.nav-sub>ul{margin-top:6px;margin-bottom:6px}
+.nav-sub li{display:block;padding-left:12px}
+.sidebar nav .nav-leaf{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:40px;padding:8px 12px;border-radius:var(--r-1);font-size:var(--t-md);font-weight:500;color:var(--shell-muted);text-align:left}
+.nav-leaf::before{content:'';flex:0 0 6px;height:6px;border-radius:50%;background:var(--shell-muted);opacity:.8;transition:background-color var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out)}
+.sidebar nav .nav-leaf:hover{background:oklch(1 0 0 / .06);color:oklch(1 0 0)}
+.sidebar nav .nav-leaf.selected,.sidebar nav .nav-leaf.selected:hover{background:transparent;color:oklch(1 0 0);font-weight:650}
+.nav-leaf.selected::before{background:var(--accent-on-dark);opacity:1;transform:scale(1.25)}
+.nav-leaf span:not(.nav-pill){flex:1;min-width:0}
+.nav-leaf .nav-pill{inset:0}
+.sidebar nav .nav-leaf-flat{min-height:46px;padding:8px 12px;font-size:var(--t-md);font-weight:550}
+@media(prefers-reduced-motion:reduce){.nav-sub{transition:none}}
