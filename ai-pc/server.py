@@ -512,7 +512,7 @@ class Handler(BaseHTTPRequestHandler):
         if token and db.execute('SELECT 1 FROM auth_sessions WHERE token_hash=? AND (expires=0 OR expires>?)', (digest(token),time.time())).fetchone():
             self.session_token = token
             return {'id':'admin','scope':'admin'}
-        staff = db.execute('SELECT s.username,s.role,s.base FROM staff_sessions t JOIN staff s ON s.username=t.username WHERE t.token_hash=? AND t.expires>? AND s.active=1', (digest(token),time.time())).fetchone() if token else None
+        staff = db.execute('SELECT s.username,s.role,s.base FROM staff_sessions t JOIN staff s ON s.username=t.username WHERE t.token_hash=? AND (t.expires=0 OR t.expires>?) AND s.active=1', (digest(token),time.time())).fetchone() if token else None
         if staff:
             self.session_token = token
             return {'id':staff['username'], 'scope':staff['role'],'base':staff['base']}
@@ -853,8 +853,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise Problem('Incorrect username or password.',401)
                 self.store.failures.pop(key,None)
                 token = secrets.token_urlsafe(32)
-                db.execute('DELETE FROM staff_sessions WHERE expires<?',(time.time(),))
-                db.execute('INSERT INTO staff_sessions VALUES(?,?,?)',(digest(token),username,time.time()+8*3600))
+                db.execute('DELETE FROM staff_sessions WHERE expires>0 AND expires<?',(time.time(),))
+                db.execute('INSERT INTO staff_sessions VALUES(?,?,?)',(digest(token),username,0))  # 0 = never expires; logout, deactivation or password change still revoke it.
                 self.store.audit(db,username,'staff_login',username,None,{'role':staff['role']})
                 db.commit()
                 return self.send({'ok':True,'role':staff['role']},headers={'Set-Cookie':self.session_cookie(token)})
