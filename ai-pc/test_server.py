@@ -434,6 +434,34 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.request('/api/employees',headers=h)[0],200)
         self.assertEqual(self.request('/api/employees','POST',{'id':'1','name':'test'},h)[0],403)
 
+    def test_integration_corrects_team_and_line_only(self):
+        self.login()
+        for eid,dept in (('P1','PRODUCTION'),('P2','PRODUCTION'),('O1','OFFICE')):
+            self.assertEqual(self.request('/api/employees','POST',{'id':eid,'name':eid,'department':dept,'line':'FC','checksheet_group':'fc1' if dept=='PRODUCTION' else '','team':'A','base':'PORT KLANG'})[0],200)
+        token=self.request('/api/devices','POST',{'name':'Checksheet','scope':'integration'})[1]['token']
+        self.cookie=''
+        h={'Authorization':'Bearer '+token}
+        put=lambda body:self.request('/api/integrations/employees','PUT',body,h)
+        # Only the allowed fields, only production staff, valid shift codes, and a named Checksheet user.
+        self.assertEqual(put({'changed_by':'Exec','changes':[{'id':'P1','name':'Renamed'}]})[0],400)
+        self.assertEqual(put({'changed_by':'Exec','changes':[{'id':'P1','team':'C'}]})[0],400)
+        self.assertEqual(put({'changes':[{'id':'P1','team':'B'}]})[0],400)
+        self.assertEqual(put({'changed_by':'Exec','changes':[{'id':'O1','team':'B'}]})[0],403)
+        # One bad change refuses the whole batch.
+        self.assertEqual(put({'changed_by':'Exec','changes':[{'id':'P1','team':'B'},{'id':'O1','team':'B'}]})[0],403)
+        self.assertEqual(self.request('/api/employees',headers=h)[1]['employees'][1]['team'],'A')
+        status,body=put({'changed_by':'Exec','changes':[{'id':'P1','team':'N'},{'id':'P2','line':'MF'}]})
+        self.assertEqual(status,200,body)
+        people={e['id']:e for e in self.request('/api/employees',headers=h)[1]['employees']}
+        self.assertEqual((people['P1']['team'],people['P1']['line'],people['P1']['checksheet_group']),('N','FC','fc1'))
+        # Leaving FC clears the FC group so the record stays valid.
+        self.assertEqual((people['P2']['team'],people['P2']['line'],people['P2']['checksheet_group']),('A','MF',''))
+        self.assertEqual(self.request('/api/employees/P1','PUT',{'name':'x'},h)[0],403)
+        self.request('/api/auth/login','POST',{'password':'test-password-long-enough'})
+        actors=[a['actor'] for a in self.request('/api/audit')[1]['audit'] if a['action']=='employee_assignment_from_checksheet']
+        self.assertEqual(len(actors),2)
+        self.assertTrue(all(a.endswith(':Exec') for a in actors))
+
     def test_failed_write_does_not_report_success(self):
         self.login()
         self.assertEqual(self.request('/api/employees','POST',{'id':'bad_id','name':'Test'})[0],400)

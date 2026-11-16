@@ -19,6 +19,7 @@ import uuid
 import zipfile
 import ssl
 import employee_admin
+import integration_assignment
 import testing_operations
 import plant_workflows
 import checksheet_shifts
@@ -574,8 +575,21 @@ class Handler(BaseHTTPRequestHandler):
                         raise Problem('Employee administrator permission is required for this operation.',403)
                 if scope == 'kiosk' and route not in ('/api/scans','/api/heartbeat','/api/employees','/api/schedules'):
                     raise Problem('Kiosk access is limited to scanning and employee lookup.', 403)
-                if scope == 'integration' and (method != 'GET' or route not in ('/api/employees','/api/attendance')):
-                    raise Problem('Integration token is read-only.', 403)
+                if scope == 'integration' and not (method == 'GET' and route in ('/api/employees','/api/attendance')) and not (method == 'PUT' and route == '/api/integrations/employees'):
+                    raise Problem('Integration token is read-only except for Checksheet team and line corrections.', 403)
+                if route == '/api/integrations/employees' and method == 'PUT':
+                    if scope != 'integration':
+                        raise Problem('Integration token required.', 403)
+                    data = self.body()
+                    db.execute('BEGIN IMMEDIATE')
+                    try:
+                        result = integration_assignment.apply(self.store, db, data, who['id'], self.plant, Problem, datetime.now(KL).isoformat())
+                    except Exception:
+                        db.rollback()
+                        raise
+                    db.commit()
+                    self.store.emit()
+                    return self.send(result)
                 if route == '/api/events' and method == 'GET':
                     return self.events()
                 if route == '/api/state' and method == 'GET':
