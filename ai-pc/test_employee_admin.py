@@ -58,11 +58,19 @@ class EmployeeAdminTests(unittest.TestCase):
         audit=json.dumps(self.request('/api/audit')[1])
         self.assertNotIn('long-staff-password',audit)
         self.assertNotIn('different-password-long',audit)
+        admin_cookie=self.cookie
         self.cookie=''
         self.assertEqual(self.request('/api/auth/login','POST',{'username':'hr','password':'different-password-long'})[0],200)
         self.assertEqual(self.request('/api/auth/status')[1]['role'],'admin')
-        with patch('server.time.time',return_value=time.time()+9*3600):
-            self.assertEqual(self.request('/api/state')[0],401)
+        # Staff sign-ins last until logout; they no longer expire after 8 hours.
+        with patch('server.time.time',return_value=time.time()+30*24*3600):
+            self.assertEqual(self.request('/api/state')[0],200)
+        # Changing the password still revokes the session.
+        staff_cookie=self.cookie
+        self.cookie=admin_cookie
+        self.assertEqual(self.request('/api/staff/hr','PUT',{'password':'third-password-long-enough'})[0],200)
+        self.cookie=staff_cookie
+        self.assertEqual(self.request('/api/state')[0],401)
 
     def test_consent_is_append_only_atomic_and_not_assumed_for_existing_employees(self):
         self.login()
