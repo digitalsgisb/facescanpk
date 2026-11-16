@@ -1,5 +1,6 @@
 import {shiftBoardState} from './checksheet-shift.js';
 import './checksheet-shift.css';
+import './board-admin.css';
 import {filterBoardPlant} from './plant-view.js';
 import {employeeLocation} from './transfer-utils.js';
 import {syncLabel} from './employee-sync.js';
@@ -8,7 +9,7 @@ import {productionSection,sortEmployees,employeeGroup} from './organisation.js';
 import {normalizeLayout,layoutGroups,moveGroup,orderCards,moveCardOrder} from './custom-layout.js';
 import {LayoutEditor,LayoutGroup,LayoutCard} from './layout-editor.jsx';
 import React,{useState,useMemo,useRef,useLayoutEffect,useEffect} from 'react';
-import {Users,Pencil,Clock3,Search,Monitor,Minimize2,Maximize2,ArrowUpDown,ChevronDown,LogIn,LogOut} from 'lucide-react';
+import {Users,Pencil,Clock3,Search,Monitor,Minimize2,Maximize2,ArrowUpDown,ChevronDown,LogIn,LogOut,LockKeyhole,X} from 'lucide-react';
 import {Morph} from './ui-kit.jsx';
 
 function Photo({employee}){
@@ -94,7 +95,35 @@ export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,setti
   </>;
 }
 
-export function LiveBoard({employees,settings={},live,onDetails,soundControl,onAdminControls,detailsOpen=false,plant='',api,onRefresh,layouts={}}){
+function BoardSignIn({onSubmit,onClose}){
+  const [password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function submit(event){event.preventDefault();setBusy(true);setError('');try{await onSubmit(password)}catch(e){setError(e.message);setPassword('')}finally{setBusy(false)}}
+  return <div className="modal-backdrop board-admin-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><form className="modal board-admin-modal" role="dialog" aria-modal="true" aria-label="Sign in to adjust attendance" onSubmit={submit}>
+    <header><div><h2>Admin sign-in</h2><p>Sign in to clock people in or out from the board. It locks again after 30 minutes.</p></div><button type="button" className="icon-button" aria-label="Close" onClick={onClose}><X size={20}/></button></header>
+    <div className="modal-body"><label>Administrator password<input autoFocus autoComplete="current-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<p className="board-admin-error" role="alert">{error}</p>}</div>
+    <footer className="modal-footer"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={busy||!password}>{busy?'Signing in…':'Sign in'}</button></footer>
+  </form></div>;
+}
+function BoardClockAction({employee:e,onClock,onDetails,onClose}){
+  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+  const next=e.status==='IN'?'OUT':'IN',shift=shiftBoardState(e);
+  async function clock(){setBusy(true);setError('');try{await onClock(e,next);onClose()}catch(err){setError(err.message)}finally{setBusy(false)}}
+  return <div className="modal-backdrop board-admin-backdrop" onMouseDown={ev=>{if(ev.target===ev.currentTarget&&!busy)onClose()}}><section className="modal board-admin-modal" role="dialog" aria-modal="true" aria-label={'Adjust attendance for '+e.name}>
+    <header><div className="board-admin-person"><Photo employee={e}/><div><h2>{e.nickname||e.name}</h2><p>{[e.id,e.position,e.department].filter(Boolean).join(' · ')}</p></div></div><button className="icon-button" aria-label="Close" disabled={busy} onClick={onClose}><X size={20}/></button></header>
+    <div className="modal-body"><p>Currently <b className={'board-admin-status '+(e.status==='IN'?'in':'out')}>{e.status}</b>{shift.label?' · '+shift.label:''}</p>{error&&<p className="board-admin-error" role="alert">{error}</p>}</div>
+    <footer className="modal-footer"><button className="secondary" disabled={busy} onClick={()=>{onClose();onDetails?.(e)}}>View details</button><button className={'primary board-admin-clock '+next.toLowerCase()} disabled={busy} onClick={clock}>{next==='IN'?<LogIn size={16}/>:<LogOut size={16}/>} {busy?'Saving…':'Clock '+next}</button></footer>
+  </section></div>;
+}
+
+export function LiveBoard({employees,settings={},live,onDetails,soundControl,onAdminControls,detailsOpen=false,plant='',api,onRefresh,layouts={},clockUnlocked=false,onUnlocked,onClock}){
+  const canAdjust=!!(onClock&&onUnlocked);
+  const [signIn,setSignIn]=useState(false),[selected,setSelected]=useState(null),[unlockedUntil,setUnlockedUntil]=useState(null);
+  useEffect(()=>{if(!canAdjust)return;api('/clock-access').then(d=>{onUnlocked(!!d.unlocked);setUnlockedUntil(d.expires_at||null)}).catch(()=>onUnlocked(false))},[]);
+  useEffect(()=>{if(!clockUnlocked||!unlockedUntil)return;const timer=setTimeout(()=>{onUnlocked(false);setSelected(null)},Math.max(0,unlockedUntil*1000-Date.now()));return()=>clearTimeout(timer)},[clockUnlocked,unlockedUntil]);
+  async function unlockBoard(password){const r=await api('/auth/unlock-attendance','POST',{password});setUnlockedUntil(r.expires_at||null);onUnlocked(true);setSignIn(false)}
+  async function lockBoard(){try{await api('/clock-access','DELETE')}catch{}onUnlocked(false);setSelected(null)}
+  async function clockFromBoard(employee,action){try{return await onClock(employee,action)}catch(e){if(e.status===403){onUnlocked(false);setSelected(null);setSignIn(true)}throw e}}
+  const selectedEmployee=selected&&employees.find(e=>e.id===selected);
   const [query,setQuery]=useState(''),[onlyIn,setOnlyIn]=useState(false),[fit,setFit]=useState(()=>{try{return sessionStorage.getItem('attendance-tv-mode')==='1'}catch{return false}}),[fullscreen,setFullscreen]=useState(()=>{try{return sessionStorage.getItem('attendance-tv-mode')==='1'}catch{return false}});
   useEffect(()=>{try{sessionStorage.setItem('attendance-tv-mode',fullscreen?'1':'0')}catch{}},[fullscreen]);
   const [mode,setMode]=useState('large'),[page,setPage]=useState(0),[rotating,setRotating]=useState(true),[dimensions,setDimensions]=useState({width:1200,height:600});
@@ -141,19 +170,22 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
     })};
     const observer=new ResizeObserver(measure);observer.observe(root.current);observer.observe(windowRef.current);measure();return()=>{observer.disconnect();cancelAnimationFrame(frame)};
   },[fit,mode,groups,custom]);
-  useEffect(()=>{if(custom||!fit||mode!=='large'||pages.length<2||!rotating||detailsOpen)return;const timer=setInterval(()=>setPage(previous=>(previous+1)%pages.length),15000);return()=>clearInterval(timer);},[fit,mode,pages.length,rotating,detailsOpen,custom]);
+  useEffect(()=>{if(custom||!fit||mode!=='large'||pages.length<2||!rotating||detailsOpen||signIn||selected)return;const timer=setInterval(()=>setPage(previous=>(previous+1)%pages.length),15000);return()=>clearInterval(timer);},[fit,mode,pages.length,rotating,detailsOpen,custom,signIn,selected]);
   async function toggleFullscreen(){if(fullscreen){if(document.fullscreenElement)await document.exitFullscreen();else setFullscreen(false);return;}setFit(true);setQuery('');setOnlyIn(false);try{await root.current.requestFullscreen()}catch{setFullscreen(true)}}
   async function admin(){if(document.fullscreenElement)await document.exitFullscreen();setFullscreen(false);onAdminControls?.();}
   return <section ref={root} data-update-blocked={editing} className={'board-page redesigned-board '+(fit?'fit-all ':'')+(fullscreen?'tv-mode ':'')+(custom?'custom-grid-board':mode==='large'?'large-photo-board':'native-overview-board')}>
-    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>{chosen==='*'?'All plants':chosen}</small></div></div><div className="board-totals">{settings.checksheet_sync&&settings.checksheet_sync.state!=='disabled'&&<span className={settings.checksheet_sync.state==='live'?'checksheet-sync-live':'checksheet-sync-warning'}>{settings.checksheet_sync.state==='live'?'Checksheet shifts linked':'Checksheet shift sync unavailable'}</span>}{!plant&&<label className="board-plant-select">Plant<select disabled={editing||layoutBusy} aria-label="TV board plant" value={chosen} onChange={e=>changePlant(e.target.value)}><option value="*">All plants</option>{locations.map(p=><option key={p}>{p}</option>)}</select></label>}<div><b>{visibleEmployees.length}</b><small>Employees</small></div><div><b>{visibleEmployees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}{!custom&&<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button>}{fullscreen&&!editing&&<button className="secondary" disabled={layoutBusy} onClick={editLayout}>Edit layout</button>}<button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Admin controls</button>}</div></header>
+    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>{chosen==='*'?'All plants':chosen}</small></div></div><div className="board-totals">{settings.checksheet_sync&&settings.checksheet_sync.state!=='disabled'&&<span className={settings.checksheet_sync.state==='live'?'checksheet-sync-live':'checksheet-sync-warning'}>{settings.checksheet_sync.state==='live'?'Checksheet shifts linked':'Checksheet shift sync unavailable'}</span>}{!plant&&<label className="board-plant-select">Plant<select disabled={editing||layoutBusy} aria-label="TV board plant" value={chosen} onChange={e=>changePlant(e.target.value)}><option value="*">All plants</option>{locations.map(p=><option key={p}>{p}</option>)}</select></label>}<div><b>{visibleEmployees.length}</b><small>Employees</small></div><div><b>{visibleEmployees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}{!custom&&<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button>}{fullscreen&&!editing&&<button className="secondary" disabled={layoutBusy} onClick={editLayout}>Edit layout</button>}<button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{canAdjust?(clockUnlocked?<><button className="secondary" disabled={editing} onClick={lockBoard}><LockKeyhole size={15}/> Lock board</button>{onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Full controls</button>}</>:<button className="primary" disabled={editing} onClick={()=>setSignIn(true)}>Admin controls</button>):onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Admin controls</button>}</div></header>
     {!fullscreen&&<div className="board-toolbar"><div className="search"><Search size={17}/><input aria-label="Search live board" disabled={editing} placeholder="Find a person, department or line…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/></div><label className="checkbox-label"><input type="checkbox" disabled={editing} checked={onlyIn} onChange={e=>{setOnlyIn(e.target.checked);setPage(0)}}/>Show clocked-in employees only</label>{!custom&&<button className="secondary" onClick={()=>setFit(!fit)}>{fit?'Scrollable view':'Fit screen'}</button>}{!editing&&<button className="secondary" disabled={layoutBusy} onClick={editLayout}>Edit layout</button>}</div>}
+    {clockUnlocked&&canAdjust&&!editing&&<div className="board-admin-banner" role="status"><LockKeyhole size={15}/> Admin signed in · Tap any card to clock that person in or out</div>}
     {layoutError&&!editing&&<p role="alert">{layoutError}</p>}
     {editing&&<LayoutEditor layout={layout} fullscreen={fullscreen} onChange={updateDraft} onSave={saveLayout} onCancel={()=>{setDraft(null);setLayoutError('')}} busy={layoutBusy} error={layoutError} conflict={!!saved?.version&&saved.version!==editVersion}/>}
     {custom&&<div className="layout-caption">{editing?'Layout preview': 'Shared layout'} · {shownCount} of {people.length} matching employees{people.length>shownCount?' · Some groups are hidden':''} · Positions shown below names</div>}
     <div className="board-stage-window" ref={windowRef}><div className="board-stage" ref={stage} style={custom?{'--layout-columns':layout.columns,'--layout-gap':layout.gap+'px','--board-card-width':layout.cardWidth+'px','--board-card-height':layout.cardHeight+'px','--board-photo-size':layout.photoSize+'px','--board-name-size':layout.fontSize+'px','--board-position-size':Math.max(9,layout.fontSize-2)+'px','--board-card-gap':'6px','--board-grid-padding':'6px'}:undefined}>{shown.map(([name,workers])=>{
-      const row=<BoardRow name={name} workers={workers} settings={settings} sort={custom?layout.sort:'position'} onDetails={editing?undefined:onDetails} cardLayout={custom?layout:undefined} editing={editing} onCardSize={resizeCard} onCardMove={moveCard}/>;
+      const row=<BoardRow name={name} workers={workers} settings={settings} sort={custom?layout.sort:'position'} onDetails={editing?undefined:clockUnlocked&&canAdjust?(e=>setSelected(e.id)):onDetails} cardLayout={custom?layout:undefined} editing={editing} onCardSize={resizeCard} onCardMove={moveCard}/>;
       return custom?<LayoutGroup key={name} name={name} config={layout.groups[name]} layout={layout} editing={editing} names={groupNames} onMove={(source,target)=>updateDraft({...layout,order:moveGroup(groupNames,source,target)})} onChange={config=>setDraft(previous=>normalizeLayout({...previous,groups:{...previous.groups,[name]:config}}))}>{row}</LayoutGroup>:<React.Fragment key={name}>{row}</React.Fragment>;
     })}{!shown.length&&<div className="empty">No visible groups. Use Edit layout to show hidden groups, or clear your filters.</div>}</div></div>
-    {!custom&&fit&&mode==='large'&&<div className="tv-fit-footer"><strong>{shownCount+' of '+people.length+' employees · Larger photos'}</strong><div className="board-page-controls"><button disabled={pages.length<2} onClick={()=>setPage((currentPage+pages.length-1)%pages.length)} aria-label="Previous TV page">Previous</button><span>Page {currentPage+1} / {pages.length}</span><button disabled={pages.length<2} onClick={()=>setPage((currentPage+1)%pages.length)} aria-label="Next TV page">Next</button><button onClick={()=>setRotating(!rotating)}>{rotating?'Pause rotation':'Resume rotation'}</button></div><span>View only · Click a card for details</span></div>}
+    {!custom&&fit&&mode==='large'&&<div className="tv-fit-footer"><strong>{shownCount+' of '+people.length+' employees · Larger photos'}</strong><div className="board-page-controls"><button disabled={pages.length<2} onClick={()=>setPage((currentPage+pages.length-1)%pages.length)} aria-label="Previous TV page">Previous</button><span>Page {currentPage+1} / {pages.length}</span><button disabled={pages.length<2} onClick={()=>setPage((currentPage+1)%pages.length)} aria-label="Next TV page">Next</button><button onClick={()=>setRotating(!rotating)}>{rotating?'Pause rotation':'Resume rotation'}</button></div><span>{clockUnlocked&&canAdjust?'Editing attendance · Tap a card to clock in or out':'View only · Click a card for details'}</span></div>}
+    {signIn&&<BoardSignIn onSubmit={unlockBoard} onClose={()=>setSignIn(false)}/>}
+    {selectedEmployee&&clockUnlocked&&<BoardClockAction employee={selectedEmployee} onClock={clockFromBoard} onDetails={onDetails} onClose={()=>setSelected(null)}/>}
   </section>;
 }
