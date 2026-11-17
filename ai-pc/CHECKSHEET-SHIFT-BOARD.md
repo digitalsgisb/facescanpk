@@ -21,7 +21,7 @@ Production employees **not** selected in a confirmed shift follow their division
 | Night team | 16:15–00:30 | 20:00–08:00 |
 | Team N | its own Attendance hours (Normal 07:45–17:40) | |
 
-When OT is not planned for a team, its cards stay ungreyed. Teams C/D, other plants and non-production departments are unaffected. A confirmed shift that names the employee always takes precedence. Swapping A/B applies immediately (at the next 15-second refresh), so swap at the changeover.
+If an off-shift person scans IN (covering or extra OT), the card turns green again, labelled **Off-shift scan**, and goes grey once they are OUT. When OT is not planned for a team, its cards stay ungreyed. Teams C/D, other plants and non-production departments are unaffected. A confirmed shift that names the employee always takes precedence. Swapping A/B applies immediately (at the next 15-second refresh), so swap at the changeover.
 
 ## Deploy both sides
 
