@@ -11,6 +11,18 @@ Times use Asia/Kuala_Lumpur. Night shifts work across midnight. Confirmed manual
 
 Grey cards show **Shift finished** alongside the actual IN/OUT status. Before the grey cutoff they show **Shift ending** during the grace period. This changes presentation only: it does not clock people out, alter face recognition, rewrite saved attendance times/payroll schedule snapshots, or change daily clock-out settings. The separate Attendance roster/template controls remain available. Employee Details shows the linked Checksheet timing separately from the Attendance template hours.
 
+## Team rotation grey (Executive Workspace → Shift rotation)
+
+Production employees **not** selected in a confirmed shift follow their division's **Shift rotation** plan instead. The feed sends each division's Day team, Night team and planned OT. A card turns grey (**Off shift**) when that person's team is outside its working hours. Cards stay normal from 30 minutes before the team's start until 30 minutes after its end:
+
+| Team | NO OT | WITH OT |
+| --- | --- | --- |
+| Day team | 08:00–16:15 | 08:00–20:00 |
+| Night team | 16:15–00:30 | 20:00–08:00 |
+| Team N | its own Attendance hours (Normal 07:45–17:40) | |
+
+When OT is not planned for a team, its cards stay ungreyed. Teams C/D, other plants and non-production departments are unaffected. A confirmed shift that names the employee always takes precedence. Swapping A/B applies immediately (at the next 15-second refresh), so swap at the changeover.
+
 ## Deploy both sides
 
 Use the existing source directories on the AI PC. Keep all existing database volumes, employee data, private configuration, machine settings and Attendance tokens. Do not use `docker compose down -v`.

@@ -150,5 +150,47 @@ class ChecksheetShiftTests(unittest.TestCase):
             self.assertEqual(stored, payload())
 
 
+    def rotation_state(self, team, kl_time, day_ot=True, night_ot=True, schedule=None, shifts_=()):
+        """Board state for a team member at a Malaysia clock time on 2026-11-17, with Team A on Day."""
+        now = datetime.fromisoformat(f'2026-11-17T{kl_time}:00+08:00').astimezone(timezone.utc)
+        data = {'schema': 1, 'generatedAt': now.isoformat(), 'shifts': list(shifts_),
+                'rotations': [{'groupId': 'conversion-port-klang', 'dayTeam': 'A', 'nightTeam': 'B', 'dayOt': day_ot, 'nightOt': night_ot}]}
+        self.assertTrue(shifts.sync_once(self.store, ENV, Opener(data), now))
+        employee = person(id='R1', team=team, effective_schedule=schedule or {'start': '07:45', 'end': '17:40', 'overtime': 0})
+        result = self.decorate(now, employee)['checksheet_shift']
+        return result and result['state']
+
+    def test_rotation_greys_the_team_not_on_its_working_hours(self):
+        # Day WITH OT 08:00-20:00, Night WITH OT 20:00-08:00, Team N normal 07:45-17:40; 30 minutes either side.
+        for kl, a, b, n in (('10:00', 'active', 'off', 'active'), ('18:00', 'active', 'off', 'grace'), ('18:15', 'active', 'off', 'off'),
+                            ('19:35', 'active', 'active', 'off'), ('20:15', 'grace', 'active', 'off'), ('20:30', 'off', 'active', 'off'),
+                            ('03:00', 'off', 'active', 'off'), ('08:15', 'active', 'grace', 'active'), ('08:30', 'active', 'off', 'active')):
+            with self.subTest(time=kl):
+                self.assertEqual([self.rotation_state(t, kl) for t in 'ABN'], [a, b, n])
+
+    def test_rotation_no_ot_hours_and_unplanned_ot(self):
+        self.assertEqual(self.rotation_state('A', '16:50', day_ot=False), 'off')
+        self.assertEqual(self.rotation_state('B', '16:50', night_ot=False), 'active')
+        self.assertEqual(self.rotation_state('B', '01:05', night_ot=False), 'off')
+        self.assertIsNone(self.rotation_state('A', '22:00', day_ot=None))
+        self.assertIsNone(self.rotation_state('C', '22:00'))
+
+    def test_confirmed_shift_link_wins_over_rotation(self):
+        linked = record(employeeIds=['R1'], startAt='2026-11-17T00:00:00Z', endAt='2026-11-17T12:00:00Z', greyAt='2026-11-17T12:30:00Z')
+        self.assertEqual(self.rotation_state('B', '10:00', shifts_=[linked]), 'active')
+
+    def test_rotation_ignores_other_plants_and_non_production(self):
+        now = datetime(2026, 11, 17, 2, 0, tzinfo=timezone.utc)
+        data = {'schema': 1, 'generatedAt': now.isoformat(), 'shifts': [], 'rotations': [{'groupId': 'conversion-port-klang', 'dayTeam': 'A', 'nightTeam': 'B', 'dayOt': True, 'nightOt': True}]}
+        self.assertTrue(shifts.sync_once(self.store, ENV, Opener(data), now))
+        for employee in (person(team='B', base='SENDAYAN'), person(team='B', department='OFFICE')):
+            self.assertIsNone(self.decorate(now, employee)['checksheet_shift'])
+
+    def test_invalid_rotation_is_rejected(self):
+        for rotation in ({'groupId': 'unknown', 'dayTeam': 'A', 'nightTeam': 'B', 'dayOt': True, 'nightOt': True},
+                         {'groupId': 'conversion-port-klang', 'dayTeam': 'A', 'nightTeam': 'A', 'dayOt': True, 'nightOt': True},
+                         {'groupId': 'conversion-port-klang', 'dayTeam': 'A', 'nightTeam': 'B', 'dayOt': 1, 'nightOt': True}):
+            self.assertFalse(shifts.sync_once(self.store, ENV, Opener({**payload(), 'rotations': [rotation]}), NOW))
+
 if __name__ == '__main__':
     unittest.main()

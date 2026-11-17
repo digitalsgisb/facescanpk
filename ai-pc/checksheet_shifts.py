@@ -12,6 +12,12 @@ GROUPS = {
     'roll-making-port-klang': ('PORT KLANG', 'ROLL MAKING'),
 }
 MAX_BYTES = 2_000_000
+KL = timezone(timedelta(hours=8))
+# Planned rotation hours, matching Checksheet: (start, end) per shift and OT choice; night ends the next day.
+ROTATION_HOURS = {('Day', False): ('08:00', '16:15'), ('Day', True): ('08:00', '20:00'),
+                  ('Night', False): ('16:15', '00:30'), ('Night', True): ('20:00', '08:00')}
+EARLY = timedelta(minutes=30)   # Cards stay normal from 30 minutes before a team's start...
+GRACE = timedelta(minutes=30)   # ...until 30 minutes after its end, then turn grey.
 
 
 def instant(value):
@@ -48,7 +54,48 @@ def validate(payload, now):
             raise ValueError('Invalid shift boundaries')
         if any(not isinstance(row.get(key), str) or not row[key] or len(row[key]) > 150 for key in ('line', 'shiftId', 'date', 'shift')):
             raise ValueError('Invalid shift labels')
+    rotations = payload.get('rotations', [])  # Older Checksheet servers do not send a rotation plan.
+    if not isinstance(rotations, list) or len({r.get('groupId') if isinstance(r, dict) else None for r in rotations}) != len(rotations):
+        raise ValueError('Invalid rotation list')
+    for row in rotations:
+        if row.get('groupId') not in GROUPS or row.get('dayTeam') not in ('A', 'B') or row.get('nightTeam') != ('B' if row['dayTeam'] == 'A' else 'A')                 or any(row.get(key) is not None and type(row.get(key)) is not bool for key in ('dayOt', 'nightOt')):
+            raise ValueError('Invalid rotation')
     return payload
+
+
+def windows(start, end, now):
+    """Yesterday's, today's and tomorrow's working window for daily hours, in Malaysia time."""
+    today = now.astimezone(KL).date()
+    for offset in (-1, 0, 1):
+        day = today + timedelta(days=offset)
+        begin = datetime.fromisoformat(f'{day}T{start}:00').replace(tzinfo=KL)
+        finish = datetime.fromisoformat(f'{day}T{end}:00').replace(tzinfo=KL)
+        yield begin, finish + timedelta(days=1) if finish <= begin else finish
+
+
+def rotation_shift(employee, rotation, now):
+    """Team-based board state from the Checksheet rotation plan; None when the team's hours are unknown."""
+    team = employee.get('team')
+    if team in (rotation['dayTeam'], rotation['nightTeam']):
+        name = 'Day' if team == rotation['dayTeam'] else 'Night'
+        overtime = rotation['dayOt' if name == 'Day' else 'nightOt']
+        if overtime is None:
+            return None
+        start, end = ROTATION_HOURS[(name, overtime)]
+    elif team == 'N':
+        schedule = employee.get('effective_schedule') or {}
+        start, end, name, overtime = schedule.get('start'), schedule.get('end'), 'Normal', bool(schedule.get('overtime'))
+        if not start or not end:
+            return None
+    else:
+        return None
+    spans = list(windows(start, end, now))
+    current = next(((b, f) for b, f in spans if b-EARLY <= now < f+GRACE), None)
+    begin, finish = current or max(((b, f) for b, f in spans if f+GRACE <= now), key=lambda span: span[1])
+    grey = finish + GRACE
+    state = 'off' if not current else 'grace' if now >= finish else 'active'
+    return {'line': f'Team {team} · {name} rotation', 'shiftId': '', 'shift': name, 'overtime': overtime, 'source': 'rotation',
+            'startAt': begin.isoformat(), 'endAt': finish.isoformat(), 'greyAt': grey.isoformat(), 'graceMinutes': 30, 'state': state}
 
 
 def status(db, now=None):
@@ -64,7 +111,8 @@ def decorate(db, employees, now=None):
     now = now or datetime.now(timezone.utc)
     health = status(db, now)
     row = db.execute('SELECT payload FROM checksheet_board_state WHERE id=1').fetchone()
-    shifts = json.loads(row['payload'])['shifts'] if row and row['payload'] else []
+    feed = json.loads(row['payload']) if row and row['payload'] else {}
+    shifts, rotations = feed.get('shifts', []), {item['groupId']: item for item in feed.get('rotations', [])}
     for employee in employees:
         employee['checksheet_shift'] = None
         if health['state'] != 'live':
@@ -75,6 +123,9 @@ def decorate(db, employees, now=None):
         group = ((employee.get('base') or '').strip().upper(), section.strip().upper())
         matches = [shift for shift in shifts if GROUPS[shift['groupId']] == group and employee['id'] in shift['employeeIds'] and instant(shift['startAt']) <= now]
         if not matches:
+            # No confirmed shift names this person: fall back to the division's planned team rotation.
+            plan = next((item for gid, item in rotations.items() if GROUPS[gid] == group), None)
+            employee['checksheet_shift'] = plan and rotation_shift(employee, plan, now)
             continue
         # A new on-duty shift wins over an older completed shift, even across lines.
         current = [shift for shift in matches if now < instant(shift['greyAt'])]
