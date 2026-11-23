@@ -462,6 +462,62 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(len(actors),2)
         self.assertTrue(all(a.endswith(':Exec') for a in actors))
 
+    def test_checksheet_manages_production_staff_and_locks_them_elsewhere(self):
+        self.login()
+        self.assertEqual(self.request('/api/employees','POST',{'id':'O1','name':'Office One','department':'OFFICE','base':'PORT KLANG'})[0],200)
+        self.assertEqual(self.request('/api/employees','POST',{'id':'P0','name':'Old Prod','department':'PRODUCTION','line':'ABB2','base':'PORT KLANG'})[0],200)
+        token=self.request('/api/devices','POST',{'name':'Checksheet','scope':'integration'})[1]['token']
+        admin_cookie,self.cookie=self.cookie,''
+        h={'Authorization':'Bearer '+token}
+        create=lambda e,by='Exec':self.request('/api/integrations/production-employees','POST',{'changed_by':by,'employee':e},h)
+        edit=lambda eid,e,at:self.request('/api/integrations/production-employees/'+eid,'PUT',{'changed_by':'Exec','employee':e,'updated_at':at},h)
+        new={'id':'5001','name':'Siti Aminah','nickname':'Siti','position':'LEADER','base':'port klang','line':'lm','team':'A','checksheet_role':'LEADER','covers_lines':['ABB2']}
+        self.assertEqual(create(new,by='')[0],400)
+        self.assertEqual(create({**new,'department':'OFFICE'})[0],400, 'department is not editable')
+        self.assertEqual(create({**new,'checksheet_role':'BOSS'})[0],400)
+        status,body=create(new)
+        self.assertEqual(status,200,body)
+        saved=body['employee']
+        self.assertEqual((saved['department'],saved['base'],saved['line'],saved['covers_lines']),('PRODUCTION','PORT KLANG','LM',['ABB2','LM']))
+        self.assertEqual(create(new)[0],409,'a staff ID is used once')
+        # Operators belong to one line only.
+        status,body=edit('5001',{'checksheet_role':'FORMING','covers_lines':['ABB2']},saved['updated_at'])
+        self.assertEqual((status,body['employee']['covers_lines']),(200,[]))
+        self.assertEqual(edit('5001',{'name':'Stale'},saved['updated_at'])[0],409,'an edit from an old copy is refused')
+        at=body['employee']['updated_at']
+        self.assertEqual(edit('O1',{'name':'x'},at)[0],403,'office staff stay out of reach')
+        self.assertEqual(edit('5001',{'photo_url':'https://x'},at)[0],400)
+        # Deactivate and reactivate; a clocked-in person cannot be deactivated.
+        self.server.store.scan({'event_id':str(uuid.uuid4()),'employee_id':'5001','timestamp':'2026-10-10T08:00:00+08:00'},'pi')
+        self.assertEqual(edit('5001',{'active':False},at)[0],409)
+        with self.server.store.connect() as db:
+            db.execute("UPDATE sessions SET time_out='2026-10-10T16:00:00+08:00'")
+            db.commit()
+        status,body=edit('5001',{'active':False},at)
+        self.assertEqual((status,body['employee']['active']),(200,0))
+        status,body=edit('5001',{'active':True},body['employee']['updated_at'])
+        self.assertEqual((status,body['employee']['active']),(200,1))
+        people={e['id']:e for e in self.request('/api/employees',headers=h)[1]['employees']}
+        self.assertEqual((people['5001']['checksheet_role'],people['5001']['covers_lines']),('FORMING','[]'))
+        # The first Checksheet save locks Production details in Attendance; photos, hours and office staff stay editable.
+        self.cookie=admin_cookie
+        self.assertEqual(self.request('/api/state')[1]['settings']['checksheet_manages_production'],1)
+        self.assertEqual(self.request('/api/employees/P0','PUT',{'name':'Renamed'})[0],403)
+        self.assertEqual(self.request('/api/employees/P0','DELETE')[0],403)
+        self.assertEqual(self.request('/api/employees','POST',{'id':'P9','name':'New','department':'PRODUCTION','line':'ABB2','base':'PORT KLANG'})[0],403)
+        self.assertEqual(self.request('/api/employees/O1','PUT',{'department':'PRODUCTION'})[0],403)
+        self.assertEqual(self.request('/api/employees/P0','PUT',{'schedule_id':'day'})[0],200)
+        self.assertEqual(self.request('/api/employees/O1','PUT',{'name':'Office Renamed'})[0],200)
+        payload={'format':'sgi-employee-roster-v1','employees':[{'id':'P0','team':'B'}]}
+        self.assertEqual(self.request('/api/employee-import/preview','POST',{'payload':payload})[0],403)
+        actions=[a['action'] for a in self.request('/api/audit')[1]['audit']]
+        self.assertIn('employee_created_from_checksheet',actions)
+        self.assertIn('production_staff_managed_by_checksheet',actions)
+        # An administrator can hand Production staff back to Attendance.
+        self.assertEqual(self.request('/api/settings','PUT',{'checksheet_manages_production':0})[0],200)
+        self.assertEqual(self.request('/api/employees/P0','PUT',{'name':'Renamed'})[0],200)
+        self.assertEqual(self.request('/api/settings','PUT',{'checksheet_manages_production':2})[0],400)
+
     def test_failed_write_does_not_report_success(self):
         self.login()
         self.assertEqual(self.request('/api/employees','POST',{'id':'bad_id','name':'Test'})[0],400)

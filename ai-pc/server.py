@@ -20,6 +20,7 @@ import zipfile
 import ssl
 import employee_admin
 import integration_assignment
+import checksheet_employees
 import testing_operations
 import plant_workflows
 import checksheet_shifts
@@ -180,6 +181,7 @@ class Store:
             for column in ('production_section','office_department','checksheet_group','company','base','employment_department','job_type'):
                 if column not in columns:
                     db.execute(f"ALTER TABLE employees ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+            checksheet_employees.migrate(db)
             if 'scope' not in {r['name'] for r in db.execute('PRAGMA table_info(assignments)')}:
                 db.execute("ALTER TABLE assignments ADD COLUMN scope TEXT NOT NULL DEFAULT ''")
             # Upgrade still-valid sessions; never revive a session that already expired.
@@ -575,8 +577,22 @@ class Handler(BaseHTTPRequestHandler):
                         raise Problem('Employee administrator permission is required for this operation.',403)
                 if scope == 'kiosk' and route not in ('/api/scans','/api/heartbeat','/api/employees','/api/schedules'):
                     raise Problem('Kiosk access is limited to scanning and employee lookup.', 403)
-                if scope == 'integration' and not (method == 'GET' and route in ('/api/employees','/api/attendance')) and not (method == 'PUT' and route == '/api/integrations/employees'):
-                    raise Problem('Integration token is read-only except for Checksheet team and line corrections.', 403)
+                staff_route = re.fullmatch(r'/api/integrations/production-employees(?:/([A-Za-z0-9-]{1,40}))?', route)
+                if scope == 'integration' and not (method == 'GET' and route in ('/api/employees','/api/attendance')) and not (method == 'PUT' and route == '/api/integrations/employees') and not (staff_route and method == ('PUT' if staff_route.group(1) else 'POST')):
+                    raise Problem('Integration token is read-only except for Checksheet Production staff changes.', 403)
+                if staff_route:
+                    if scope != 'integration' or method != ('PUT' if staff_route.group(1) else 'POST'):
+                        raise Problem('Integration token required.', 403)
+                    data = self.body()
+                    db.execute('BEGIN IMMEDIATE')
+                    try:
+                        result = checksheet_employees.save(self.store, db, data, who['id'], self.plant, Problem, datetime.now(KL).isoformat(), staff_route.group(1))
+                    except Exception:
+                        db.rollback()
+                        raise
+                    db.commit()
+                    self.store.emit()
+                    return self.send(result)
                 if route == '/api/integrations/employees' and method == 'PUT':
                     if scope != 'integration':
                         raise Problem('Integration token required.', 403)
@@ -1027,6 +1043,7 @@ class Handler(BaseHTTPRequestHandler):
             self.store.snapshot(db,sid,e)
             return {'ok':True}
         if route == '/api/employees' and method == 'POST':
+            checksheet_employees.guard(db,None,data,Problem)
             self.store.validate_employee(db,data)
             self.store.insert_employee(db,data)
             if data.get('consent_record') is not None:
@@ -1046,6 +1063,7 @@ class Handler(BaseHTTPRequestHandler):
                 if db.execute('SELECT 1 FROM sessions WHERE employee_id=? AND time_out IS NULL',(eid,)).fetchone():
                     raise Problem('Close or correct the open session before archiving this employee.',409)
                 after['active']=0
+            checksheet_employees.guard(db,before,after,Problem)
             self.store.validate_employee(db,after)
             after['updated_at']=datetime.now(KL).isoformat()
             db.execute('UPDATE employees SET '+','.join(f'{f}=?' for f in FIELDS[1:])+',updated_at=? WHERE id=?',
@@ -1115,6 +1133,9 @@ class Handler(BaseHTTPRequestHandler):
                     for scope,config in value.items():
                         validate_scope(scope)
                         validate_team_settings(db,config)
+                elif key==checksheet_employees.SETTING:
+                    if value not in (0,1) or type(value) is not int:
+                        raise Problem('Choose on or off for Production staff managed in Smart Checksheet.')
                 elif key=='employee_sort':
                     if value not in ('position','manual','name'):
                         raise Problem('Choose position, manual or name sorting.')

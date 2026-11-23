@@ -5,6 +5,8 @@ import re
 import uuid
 from datetime import datetime
 
+import checksheet_employees
+
 ROSTER_FIELDS = ('id','name','nickname','company','base','department','office_department','production_section','line','team','position','employment_department','job_type','schedule_id')
 
 IMPORT_FIELDS = ('id','name','company','base','employment_department','job_type')
@@ -105,6 +107,10 @@ def preview(store,db,payload,FIELDS,Problem,base=''):
             after['schedule_id']=None
         if after.get('department')!='PRODUCTION' or (after.get('line') or '').upper()!='FC':
             after['checksheet_group']=''
+        try:
+            checksheet_employees.guard(db,old,after,Problem)
+        except Problem:
+            raise Problem('Employee '+source['id']+' is Production staff managed in Smart Checksheet. Remove them from the file or change them there.',403)
         store.validate_employee(db,after)
         if old and after.get('checksheet_group') != old.get('checksheet_group'):
             updates['checksheet_group']=after['checksheet_group']
