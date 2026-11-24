@@ -481,7 +481,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual((saved['department'],saved['base'],saved['line'],saved['covers_lines']),('PRODUCTION','PORT KLANG','LM',['ABB2','LM']))
         self.assertEqual(create(new)[0],409,'a staff ID is used once')
         # Operators belong to one line only.
-        status,body=edit('5001',{'checksheet_role':'FORMING','covers_lines':['ABB2']},saved['updated_at'])
+        status,body=edit('5001',{'checksheet_role':'OPERATOR','covers_lines':['ABB2']},saved['updated_at'])
         self.assertEqual((status,body['employee']['covers_lines']),(200,[]))
         self.assertEqual(edit('5001',{'name':'Stale'},saved['updated_at'])[0],409,'an edit from an old copy is refused')
         at=body['employee']['updated_at']
@@ -498,7 +498,7 @@ class HttpTests(unittest.TestCase):
         status,body=edit('5001',{'active':True},body['employee']['updated_at'])
         self.assertEqual((status,body['employee']['active']),(200,1))
         people={e['id']:e for e in self.request('/api/employees',headers=h)[1]['employees']}
-        self.assertEqual((people['5001']['checksheet_role'],people['5001']['covers_lines']),('FORMING','[]'))
+        self.assertEqual((people['5001']['checksheet_role'],people['5001']['covers_lines']),('OPERATOR','[]'))
         # The first Checksheet save locks Production details in Attendance; photos, hours and office staff stay editable.
         self.cookie=admin_cookie
         self.assertEqual(self.request('/api/state')[1]['settings']['checksheet_manages_production'],1)

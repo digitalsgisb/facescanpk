@@ -10,7 +10,8 @@ face enrollment stay in Attendance.
 import json
 import re
 
-ROLES = ('', 'SUPERVISOR', 'LEADER', 'FORMING', 'WATERJET', 'ASSEMBLY', 'QUALITY')
+# Operator covers forming, waterjet and assembly. The three older values stay valid for records saved before Operator existed.
+ROLES = ('', 'SUPERVISOR', 'LEADER', 'OPERATOR', 'QUALITY', 'FORMING', 'WATERJET', 'ASSEMBLY')
 COVERING_ROLES = ('SUPERVISOR', 'LEADER')
 # Production details the Checksheet owns once the lock is on.
 LOCKED = ('name', 'nickname', 'department', 'position', 'line', 'team', 'production_section', 'checksheet_group', 'base', 'active')
@@ -60,7 +61,7 @@ def _text(value, name, problem, limit=80, required=False):
 def _clean(e, problem):
     role = e.get('checksheet_role', '')
     if role not in ROLES:
-        raise problem('Choose Supervisor, Leader, Forming, Waterjet, Assembly or Quality.')
+        raise problem('Choose Supervisor, Leader, Operator or Quality.')
     covers = e.get('covers_lines', [])
     if isinstance(covers, str):
         covers = json.loads(covers or '[]')
