@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0,str(Path(__file__).parent.parent/'ai-pc'))
 from server import make_server,digest
 from kiosk_transport import ReliableTransport
-from kiosk_config import KIOSK_USER_AGENT, load_config, validate_config
+from kiosk_config import KIOSK_USER_AGENT, load_config, load_plant_label, validate_config
 from configure_kiosk import check_connection, save_config
 
 TEST_ROOT=Path(__file__).resolve().parent.parent/'ai-pc/runtime/tests'
@@ -129,6 +129,14 @@ class TransportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             save_config(folder,'http://0.0.0.0:8765','bad-token')
         self.assertEqual(load_config(folder,{})[1],'saved-token')
+        self.assertEqual(load_plant_label(folder,{}),'PORT KLANG')
+        with open(folder/'kiosk.env','a',encoding='utf-8') as file:
+            file.write('KIOSK_PLANT_LABEL="  sendayan "\n')
+        self.assertEqual(load_plant_label(folder,{}),'SENDAYAN')
+        save_config(folder,'https://attendance.example.org','new-token')
+        self.assertEqual(load_plant_label(folder,{}),'SENDAYAN')
+        self.assertEqual(load_config(folder,{}),('https://attendance.example.org','new-token'))
+        self.assertEqual(load_plant_label(folder,{'KIOSK_PLANT_LABEL':'Port Klang'}),'PORT KLANG')
         for url,token in [('', 'token'),('http://pc:8765',''),('http://pc:8765','replace-with-a-token'),('http://user:pass@pc:8765','token')]:
             with self.assertRaises(ValueError):
                 validate_config(url,token)

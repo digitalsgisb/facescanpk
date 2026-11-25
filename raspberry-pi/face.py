@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 from kiosk_transport import ReliableTransport
-from kiosk_config import load_config
+from kiosk_config import load_config, load_plant_label
 from kiosk_touch import enable_touch_buttons, trace_input
 from kiosk_instance import kiosk_instance, KioskAlreadyRunning
 from kiosk_vision import camera_worker, inference_worker, put_latest
@@ -280,7 +280,7 @@ class SmartAttendanceSystem:
 
         brand = tk.Frame(self.frame_menu, bg=backdrop)
         brand.place(relx=0, rely=0, relwidth=.34, relheight=1)
-        tk.Label(brand, text='PORT KLANG', font=('Arial', 9, 'bold'),
+        tk.Label(brand, text=load_plant_label(BASE_DIR), font=('Arial', 9, 'bold'),
                  bg=backdrop, fg=GUI_INK, anchor='center').place(relx=.5, rely=.18, anchor='center')
         logo = self.get_logo_image(92, 92, backdrop)
         if logo:

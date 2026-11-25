@@ -28,6 +28,26 @@ def load_config(directory, environ=None):
     return validate_config(values.get('ATTENDANCE_API_URL', ''), values.get('ATTENDANCE_DEVICE_TOKEN', ''))
 
 
+def load_plant_label(directory, environ=None, default='PORT KLANG'):
+    """Welcome-screen plant name from KIOSK_PLANT_LABEL; display only, never used for access."""
+    value = ''
+    path = Path(directory) / 'kiosk.env'
+    try:
+        lines = path.read_text(encoding='utf-8-sig').splitlines() if path.exists() else []
+    except (OSError, UnicodeDecodeError):
+        lines = []
+    for line in lines:
+        key, separator, raw = line.strip().partition('=')
+        if separator and key.strip() == 'KIOSK_PLANT_LABEL':
+            value = raw.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+    env = os.environ if environ is None else environ
+    value = env.get('KIOSK_PLANT_LABEL', value)
+    value = ' '.join(value.split())[:40]
+    return value.upper() if value else default
+
+
 def validate_config(url, token):
     url, token = url.strip().rstrip('/'), token.strip()
     try:

@@ -7,7 +7,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
-from kiosk_config import KIOSK_USER_AGENT, load_config, validate_config
+from kiosk_config import KIOSK_USER_AGENT, load_config, load_plant_label, validate_config
 
 BASE = Path(__file__).resolve().parent
 
@@ -38,10 +38,13 @@ def check_connection(url, token):
 def save_config(directory, url, token):
     url, token = validate_config(url, token)
     directory = Path(directory)
+    label = load_plant_label(directory, {}, default='')
     fd, temporary = tempfile.mkstemp(prefix='.kiosk-', suffix='.tmp', dir=directory)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as file:
             file.write(f'ATTENDANCE_API_URL={url}\nATTENDANCE_DEVICE_TOKEN={token}\n')
+            if label:
+                file.write(f'KIOSK_PLANT_LABEL={label}\n')
             file.flush()
             os.fsync(file.fileno())
         os.chmod(temporary, 0o600)
