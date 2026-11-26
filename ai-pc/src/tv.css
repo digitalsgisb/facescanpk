@@ -110,3 +110,43 @@ html.tv-locked, html.tv-locked body { overflow: hidden; overscroll-behavior: non
    Outside real full screen (after any reload) that traps the board under the sticky top bar and tab bar,
    so TV mode drops both. */
 html.tv-locked .page, .page:has(> .tv-mode) { view-transition-name: none; animation: none; }
+
+/* ---------- Burn-in protection ---------- */
+/* Every two minutes the board content drifts a few pixels (set by usePixelShift). */
+.redesigned-board.tv-mode > :not(.modal-backdrop):not(.tv-rest) { translate: var(--tvx, 0) var(--tvy, 0); transition: translate 2s ease-in-out; }
+/* The rest screen: near-black, with one small block of soft grey text that wanders slowly between spots. */
+.tv-rest { position: absolute; inset: 0; z-index: 20; display: block; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: #000; cursor: pointer; overflow: hidden; animation: tv-rest-in 1.2s ease-out both; }
+.tv-rest:focus-visible { outline: none; }
+.tv-rest-panel { position: absolute; width: min(900px, 78vw); display: grid; gap: clamp(18px, 3vh, 36px); transform: translate(-50%, -50%); text-align: left; color: oklch(0.62 0.01 260); transition: left 6s ease-in-out, top 6s ease-in-out; font-variant-numeric: tabular-nums; }
+.tv-rest-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 14px; border-bottom: 1px solid oklch(0.28 0.01 260); }
+.tv-rest-time { font-size: clamp(48px, 7vw, 104px); font-weight: 200; letter-spacing: -0.03em; line-height: .9; color: oklch(0.74 0.01 260); }
+.tv-rest-date { font-size: clamp(14px, 1.5vw, 20px); line-height: 1.4; text-align: right; }
+.tv-rest-scene { display: grid; gap: 18px; min-height: clamp(220px, 38vh, 380px); align-content: start; animation: tv-rest-in 1.4s ease-out both; }
+.tv-rest-title { font-size: clamp(18px, 2vw, 26px); font-weight: 600; color: oklch(0.80 0.01 260); }
+.tv-rest-hero { display: grid; gap: 10px; }
+.tv-rest-hero strong { font-size: clamp(90px, 14vw, 200px); font-weight: 250; line-height: .9; letter-spacing: -0.04em; color: #4fb47c; }
+.tv-rest-hero span { font-size: clamp(16px, 1.8vw, 24px); }
+.tv-rest-hero small { font-size: clamp(13px, 1.3vw, 17px); color: oklch(0.50 0.01 260); }
+.tv-rest-meter { display: block; height: 10px; margin-top: 8px; border-radius: 5px; background: oklch(0.26 0.01 260); overflow: hidden; }
+.tv-rest-meter i, .tv-rest-bar-track i { display: block; height: 100%; border-radius: 4px; background: #4fb47c; }
+.tv-rest-bars { display: grid; gap: 12px; }
+.tv-rest-bar { display: grid; grid-template-columns: minmax(120px, 28%) 1fr auto; align-items: center; gap: 16px; font-size: clamp(14px, 1.4vw, 18px); }
+.tv-rest-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: oklch(0.70 0.01 260); }
+.tv-rest-bar-lane { display: block; min-width: 0; }
+.tv-rest-bar-track { display: block; min-width: 6px; height: 14px; border-radius: 4px; background: oklch(0.26 0.01 260); overflow: hidden; }
+.tv-rest-bar-value { min-width: 64px; text-align: right; color: oklch(0.55 0.01 260); }
+.tv-rest-bar-value b { color: oklch(0.82 0.01 260); font-weight: 600; }
+.tv-rest-foot { display: flex; align-items: center; gap: 14px; font-size: 13px; color: oklch(0.45 0.01 260); }
+.tv-rest-steps { display: flex; gap: 6px; }
+.tv-rest-steps i { width: 18px; height: 3px; border-radius: 2px; background: oklch(0.30 0.01 260); }
+.tv-rest-steps i.is-on { background: oklch(0.62 0.01 260); }
+.tv-rest.is-window { position: fixed; z-index: 1100; }
+@keyframes tv-rest-in { from { opacity: 0; } to { opacity: 1; } }
+.tv-rest-setting { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+.tv-rest-setting select { width: auto; min-height: 36px; }
+@media (prefers-reduced-motion: reduce) {
+  .redesigned-board.tv-mode > * { transition: none; }
+  .tv-rest-panel { transition: none; }
+  .tv-rest-scene { animation: none; }
+  .tv-rest { animation: none; }
+}
