@@ -12,12 +12,12 @@ import React,{useState,useMemo,useRef,useLayoutEffect,useEffect} from 'react';
 import {Users,Pencil,Clock3,Search,Monitor,Minimize2,Maximize2,ArrowUpDown,ChevronDown,LogIn,LogOut,LockKeyhole,X} from 'lucide-react';
 import {Morph} from './ui-kit.jsx';
 
-function Photo({employee}){
+export function Photo({employee}){
   const [failed,setFailed]=useState(false);
   useEffect(()=>setFailed(false),[employee.photo_url]);
   return <span className="staff-photo">{employee.photo_url&&!failed?<img src={employee.photo_url} alt="" loading="lazy" onError={()=>setFailed(true)}/>:employee.name.split(' ').slice(0,2).map(n=>n[0]).join('')}</span>;
 }
-function sortPeople(people,sort,settings={}){
+export function sortPeople(people,sort,settings={}){
   const mode=sort==='saved'?(settings.employee_sort||'position'):sort;
   const sorted=sortEmployees(people,mode,settings.employee_order||[]);
   if(mode==='status')return sorted.sort((a,b)=>(a.status==='IN'?0:1)-(b.status==='IN'?0:1));
@@ -63,38 +63,6 @@ function BoardRow({name,workers,onDetails,settings,sort='position',cardLayout,ed
     </section>)}</div>
   </section>;
 }
-export function EmployeeGroups({employees,onEdit,onAttendance,onClock,busy,settings={}}){
-  const [sort,setSort]=useState('saved'),[selected,setSelected]=useState('PORT KLANG / OFFICE'),[pages,setPages]=useState({});
-  const directory=useRef(null),navigator=useRef(null);
-  const [shortcutsOpen,setShortcutsOpen]=useState(false);
-  const groups=useMemo(()=>Object.entries(employees.reduce((out,e)=>{(out[employeeLocation(e)+' / '+(productionSection(e)?'PRODUCTION · '+productionSection(e):e.department||'Unassigned')]||=[]).push(e);return out},{})).sort(([a],[b])=>departmentOrder(a,b)),[employees]);
-  const signature=employees.map(e=>e.id).join('|');
-  useEffect(()=>setPages({}),[signature,sort,settings.employee_sort,settings.employee_order?.join('|')]);
-  const active=groups.some(([name])=>name===selected)||selected===null?selected:groups[0]?.[0];
-  const displayedGroups=groups.filter(([name])=>name===active);
-  function choose(dept){
-    setSelected(dept);setShortcutsOpen(false);
-    requestAnimationFrame(()=>{
-      if(!directory.current)return;
-      const offset=(document.querySelector('.topbar')?.offsetHeight||0)+(navigator.current?.offsetHeight||0)+24;
-      window.scrollTo({top:Math.max(0,window.scrollY+directory.current.getBoundingClientRect().top-offset),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
-    });
-  }
-  const pageSize=8;
-  return <>
-    <div className="group-view-toolbar"><span><Users size={16}/>{groups.length} groups · {employees.length} employees</span><label><ArrowUpDown size={15}/>Sort people<select aria-label="Sort employee cards" value={sort} onChange={e=>setSort(e.target.value)}><option value="saved">Saved display order</option><option value="manual">Manual order</option><option value="name">Name A–Z</option><option value="team">Team & production line</option><option value="role">Role seniority</option><option value="status">Clocked in first</option></select></label></div>
-    <details ref={navigator} className="directory-shortcuts" open={shortcutsOpen} onToggle={e=>setShortcutsOpen(e.currentTarget.open)}><summary>Groups ({groups.length})</summary><nav className="department-navigator" aria-label="Department shortcuts">{groups.map(([dept,people])=><button key={dept} className={active===dept?'current':''} onClick={()=>choose(dept)} aria-pressed={active===dept}>{dept}<span>{people.length}</span></button>)}</nav></details>
-    <label className="directory-group-select">Group<select aria-label="Employee group" value={active||''} onChange={e=>choose(e.target.value)}><option value="">Choose group</option>{groups.map(([name,people])=><option key={name} value={name}>{name} ({people.length})</option>)}</select></label>
-    <div ref={directory} className="employee-departments compact-directory">{displayedGroups.map(([department,people],i)=>{
-      const open=active===department, page=Math.min(pages[department]||0,Math.max(0,Math.ceil(people.length/pageSize)-1));
-      return <section className={'department-card '+(open?'department-open':'')} key={department}>
-        <button className="department-card-heading" onClick={()=>open?setSelected(null):choose(department)} aria-expanded={open}><span className="department-symbol"><Users size={20}/></span><div><h2>{department}</h2><small>{people.length} people · {people.filter(e=>e.status==='IN').length} currently in</small></div><ChevronDown size={18} className={!open?'collapsed':''}/></button>
-        <div className={'department-collapse '+(open?'is-open':'')} aria-hidden={!open} inert={!open?true:undefined}><div className="department-collapse-inner"><div className="department-staff">{sortPeople(people,sort,settings).slice(page*pageSize,(page+1)*pageSize).map(e=><article className={"staff-card"+(shiftBoardState(e).finished?" shift-finished":"")} key={e.id}><div className="staff-card-top"><Photo employee={e}/><div className="staff-identity"><strong title={e.name}>{e.nickname||e.name}</strong><small>{e.id}</small></div><span className={'staff-status '+(e.status==='IN'?'in':'out')}><Morph k={e.status}>{e.status==='IN'?'In':'Out'}</Morph></span></div><div className="staff-details"><span>{e.position||'Employee'}{e.line?' · '+e.line:''}{e.office_department?' · '+e.office_department:''}{productionSection(e)&&productionSection(e)!==e.line?.trim().toUpperCase()?' · '+productionSection(e):''}</span><span>{e.team?'Team '+e.team:'No team'} · {e.effective_schedule?`${e.effective_schedule.start}–${e.effective_schedule.end}`:'Hours unassigned'}</span></div><span className="shift-board-label">{shiftBoardState(e).label} {shiftBoardState(e).detail}</span><small className="staff-sync" role="status">Details: {syncLabel(e.metadata_sync?.status)}</small><div className="staff-actions"><button aria-label={'Edit '+e.name} onClick={()=>onEdit(e)}><Pencil size={13}/>Profile</button>{onAttendance&&<button aria-label={'Update attendance for '+e.name} onClick={()=>onAttendance(e)}><Pencil size={13}/>Edit attendance</button>}{e.active&&onClock&&<button className={"quick-clock "+(e.status==='IN'?'clock-out':'clock-in')} disabled={busy} aria-label={(e.status==='IN'?'Clock out ':'Clock in ')+e.name} onClick={()=>onClock(e)}><Morph k={e.status}>{e.status==='IN'?<><LogOut size={15}/>Clock out</>:<><LogIn size={15}/>Clock in</>}</Morph></button>}</div></article>)}</div><footer className="department-pagination"><span>Showing {page*pageSize+1}–{Math.min((page+1)*pageSize,people.length)} of {people.length} employees</span><div><button disabled={page===0} onClick={()=>setPages({...pages,[department]:page-1})} aria-label={'Previous '+department+' employees'}>Previous</button><span>{page+1} / {Math.ceil(people.length/pageSize)}</span><button disabled={(page+1)*pageSize>=people.length} onClick={()=>setPages({...pages,[department]:page+1})} aria-label={'Next '+department+' employees'}>Next</button></div></footer></div></div>
-      </section>;
-    })}</div>{!employees.length&&<div className="empty"><Search size={30}/><h3>No matching employees</h3><p>Try a different search or filter.</p></div>}
-  </>;
-}
-
 function BoardSignIn({onSubmit,onClose}){
   const [password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   async function submit(event){event.preventDefault();setBusy(true);setError('');try{await onSubmit(password)}catch(e){setError(e.message);setPassword('')}finally{setBusy(false)}}
@@ -115,6 +83,9 @@ function BoardClockAction({employee:e,onClock,onDetails,onClose}){
   </section></div>;
 }
 
+// TV mode survives a reload (an app update, a power blip) through sessionStorage, or a ?tv link for a kiosk browser shortcut.
+function tvRequested(){try{return new URLSearchParams(window.location.search).has('tv')||sessionStorage.getItem('attendance-tv-mode')==='1'}catch{return false}}
+
 export function LiveBoard({employees,settings={},live,onDetails,soundControl,onAdminControls,detailsOpen=false,plant='',api,onRefresh,layouts={},clockUnlocked=false,onUnlocked,onClock}){
   const canAdjust=!!(onClock&&onUnlocked);
   const [signIn,setSignIn]=useState(false),[selected,setSelected]=useState(null),[unlockedUntil,setUnlockedUntil]=useState(null);
@@ -124,7 +95,7 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
   async function lockBoard(){try{await api('/clock-access','DELETE')}catch{}onUnlocked(false);setSelected(null)}
   async function clockFromBoard(employee,action){try{return await onClock(employee,action)}catch(e){if(e.status===403){onUnlocked(false);setSelected(null);setSignIn(true)}throw e}}
   const selectedEmployee=selected&&employees.find(e=>e.id===selected);
-  const [query,setQuery]=useState(''),[onlyIn,setOnlyIn]=useState(false),[fit,setFit]=useState(()=>{try{return sessionStorage.getItem('attendance-tv-mode')==='1'}catch{return false}}),[fullscreen,setFullscreen]=useState(()=>{try{return sessionStorage.getItem('attendance-tv-mode')==='1'}catch{return false}});
+  const [query,setQuery]=useState(''),[onlyIn,setOnlyIn]=useState(false),[fit,setFit]=useState(tvRequested),[fullscreen,setFullscreen]=useState(tvRequested),[resume,setResume]=useState(false);
   useEffect(()=>{try{sessionStorage.setItem('attendance-tv-mode',fullscreen?'1':'0')}catch{}},[fullscreen]);
   const [mode,setMode]=useState('large'),[page,setPage]=useState(0),[rotating,setRotating]=useState(true),[dimensions,setDimensions]=useState({width:1200,height:600});
   const [boardPlant,setBoardPlant]=useState(()=>{try{return localStorage.getItem('attendance-board-plant')||'PORT KLANG'}catch{return 'PORT KLANG'}});
@@ -155,10 +126,27 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
   const currentPage=Math.min(page,pages.length-1),shown=custom?layoutGroups(groups,layout).filter(([name])=>editing||!layout.groups[name]?.hidden):fit&&mode==='large'?pages[currentPage]:groups;
   const groupNames=layoutGroups(groups,layout).map(([name])=>name);
   const shownCount=shown.reduce((sum,[,workers])=>sum+workers.length,0);
+  // Browsers drop full screen on every reload and only allow it back after a click or key press.
+  // Until then the board still fills the window, the page behind it cannot scroll, and the next click restores full screen.
+  useEffect(()=>{
+    const html=document.documentElement;
+    if(!fullscreen){setResume(false);return}
+    html.classList.add('tv-locked');
+    if(document.fullscreenElement||!document.fullscreenEnabled)return()=>html.classList.remove('tv-locked');
+    setResume(true);
+    const again=event=>{
+      if(document.fullscreenElement||event.target?.closest?.('button,a,input,select,textarea,[role="dialog"]'))return;
+      root.current?.requestFullscreen?.().then(()=>setResume(false)).catch(()=>{});
+    };
+    window.addEventListener('pointerdown',again);window.addEventListener('keydown',again);
+    return()=>{html.classList.remove('tv-locked');window.removeEventListener('pointerdown',again);window.removeEventListener('keydown',again)};
+  },[fullscreen]);
   useEffect(()=>{const listener=()=>{const active=document.fullscreenElement===root.current;setFullscreen(active);if(active){setFit(true);setQuery('');setOnlyIn(false)}};document.addEventListener('fullscreenchange',listener);return()=>document.removeEventListener('fullscreenchange',listener)},[]);
   useLayoutEffect(()=>{
     let frame;const measure=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
-      if(!windowRef.current)return;const width=Math.floor(windowRef.current.clientWidth),height=Math.max(1,Math.floor(windowRef.current.clientHeight)-6);
+      if(!windowRef.current||document.visibilityState==='hidden')return;const width=Math.floor(windowRef.current.clientWidth),height=Math.max(1,Math.floor(windowRef.current.clientHeight)-6);
+      // Skip the in-between sizes a window passes through while entering or leaving full screen.
+      if(width<200||height<120)return;
       setDimensions(previous=>previous.width===width&&previous.height===height?previous:{width,height});
       if(!stage.current||custom)return;
       if(mode!=='all'||!fit){stage.current.removeAttribute('style');return;}
@@ -168,13 +156,17 @@ export function LiveBoard({employees,settings={},live,onDetails,soundControl,onA
       for(let i=0;i<14;i++){const candidate=(low+high)/2;stage.current.style.width=(width/candidate)+'px';if(stage.current.scrollHeight*candidate<=height)low=candidate;else high=candidate;}
       stage.current.style.width=(width/low)+'px';stage.current.style.setProperty('--compact-transform','scale('+low+')');
     })};
-    const observer=new ResizeObserver(measure);observer.observe(root.current);observer.observe(windowRef.current);measure();return()=>{observer.disconnect();cancelAnimationFrame(frame)};
+    const observer=new ResizeObserver(measure);observer.observe(root.current);observer.observe(windowRef.current);measure();
+    // Re-measure once fonts load and whenever the screen changes size or the tab comes back, so a reload never keeps a stale fit.
+    let live=true;document.fonts?.ready.then(()=>{if(live)measure()});
+    window.addEventListener('resize',measure);document.addEventListener('fullscreenchange',measure);document.addEventListener('visibilitychange',measure);
+    return()=>{live=false;observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',measure);document.removeEventListener('fullscreenchange',measure);document.removeEventListener('visibilitychange',measure)};
   },[fit,mode,groups,custom]);
   useEffect(()=>{if(custom||!fit||mode!=='large'||pages.length<2||!rotating||detailsOpen||signIn||selected)return;const timer=setInterval(()=>setPage(previous=>(previous+1)%pages.length),15000);return()=>clearInterval(timer);},[fit,mode,pages.length,rotating,detailsOpen,custom,signIn,selected]);
   async function toggleFullscreen(){if(fullscreen){if(document.fullscreenElement)await document.exitFullscreen();else setFullscreen(false);return;}setFit(true);setQuery('');setOnlyIn(false);try{await root.current.requestFullscreen()}catch{setFullscreen(true)}}
   async function admin(){if(document.fullscreenElement)await document.exitFullscreen();setFullscreen(false);onAdminControls?.();}
   return <section ref={root} data-update-blocked={editing} className={'board-page redesigned-board '+(fit?'fit-all ':'')+(fullscreen?'tv-mode ':'')+(custom?'custom-grid-board':mode==='large'?'large-photo-board':'native-overview-board')}>
-    <header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>{chosen==='*'?'All plants':chosen}</small></div></div><div className="board-totals">{settings.checksheet_sync&&settings.checksheet_sync.state!=='disabled'&&<span className={settings.checksheet_sync.state==='live'?'checksheet-sync-live':'checksheet-sync-warning'}>{settings.checksheet_sync.state==='live'?'Checksheet shifts linked':'Checksheet shift sync unavailable'}</span>}{!plant&&<label className="board-plant-select">Plant<select disabled={editing||layoutBusy} aria-label="TV board plant" value={chosen} onChange={e=>changePlant(e.target.value)}><option value="*">All plants</option>{locations.map(p=><option key={p}>{p}</option>)}</select></label>}<div><b>{visibleEmployees.length}</b><small>Employees</small></div><div><b>{visibleEmployees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}{!custom&&<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button>}{fullscreen&&!editing&&<button className="secondary" disabled={layoutBusy} onClick={editLayout}>Edit layout</button>}<button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{canAdjust?(clockUnlocked?<><button className="secondary" disabled={editing} onClick={lockBoard}><LockKeyhole size={15}/> Lock board</button>{onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Full controls</button>}</>:<button className="primary" disabled={editing} onClick={()=>setSignIn(true)}>Admin controls</button>):onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Admin controls</button>}</div></header>
+    {resume&&<p className="tv-resume" role="status">Click anywhere on the board to fill the screen again</p>}<header className="board-header"><div className="board-brand"><img src="/1.png" alt="Sugihara"/><div><h2>Digital Attendance</h2><small>{chosen==='*'?'All plants':chosen}</small></div></div><div className="board-totals">{settings.checksheet_sync&&settings.checksheet_sync.state!=='disabled'&&<span className={settings.checksheet_sync.state==='live'?'checksheet-sync-live':'checksheet-sync-warning'}>{settings.checksheet_sync.state==='live'?'Checksheet shifts linked':'Checksheet shift sync unavailable'}</span>}{!plant&&<label className="board-plant-select">Plant<select disabled={editing||layoutBusy} aria-label="TV board plant" value={chosen} onChange={e=>changePlant(e.target.value)}><option value="*">All plants</option>{locations.map(p=><option key={p}>{p}</option>)}</select></label>}<div><b>{visibleEmployees.length}</b><small>Employees</small></div><div><b>{visibleEmployees.filter(e=>e.status==='IN').length}</b><small>Currently in</small></div><span className={'badge '+(live?'green':'amber')}>{live?'Live':'Reconnecting'}</span>{soundControl}{!custom&&<button className="secondary" onClick={()=>{setMode(mode==='large'?'all':'large');setFit(true);setPage(0)}}>{mode==='large'?'Compact overview':'Large photos'}</button>}{fullscreen&&!editing&&<button className="secondary" disabled={layoutBusy} onClick={editLayout}>Edit layout</button>}<button className="secondary" onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={15}/>:<Monitor size={15}/>} {fullscreen?'Exit TV':'TV fullscreen'}</button>{canAdjust?(clockUnlocked?<><button className="secondary" disabled={editing} onClick={lockBoard}><LockKeyhole size={15}/> Lock board</button>{onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Full controls</button>}</>:<button className="primary" disabled={editing} onClick={()=>setSignIn(true)}>Admin controls</button>):onAdminControls&&<button className="primary" disabled={editing} onClick={admin}>Admin controls</button>}</div></header>
     {!fullscreen&&<div className="board-toolbar"><div className="search"><Search size={17}/><input aria-label="Search live board" disabled={editing} placeholder="Find a person, department or line…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/></div><label className="checkbox-label"><input type="checkbox" disabled={editing} checked={onlyIn} onChange={e=>{setOnlyIn(e.target.checked);setPage(0)}}/>Show clocked-in employees only</label>{!custom&&<button className="secondary" onClick={()=>setFit(!fit)}>{fit?'Scrollable view':'Fit screen'}</button>}{!editing&&<button className="secondary" disabled={layoutBusy} onClick={editLayout}>Edit layout</button>}</div>}
     {clockUnlocked&&canAdjust&&!editing&&<div className="board-admin-banner" role="status"><LockKeyhole size={15}/> Admin signed in · Tap any card to clock that person in or out</div>}
     {layoutError&&!editing&&<p role="alert">{layoutError}</p>}

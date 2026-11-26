@@ -30,7 +30,7 @@ export function SidebarNav({nav,page,onNavigate,alerts=0}){
         {!isOpen&&items.some(item=>item[0]==='attention')&&alerts>0&&<span className="nav-count alert">{alerts}</span>}
         <span className="nav-chevron"><ChevronDown size={15}/></span>
       </button>
-      <div className="nav-sub" inert={!isOpen?true:undefined}><ul>{items.map(([id,label])=><li key={id}>
+      <div className="nav-sub" inert={!isOpen?true:undefined}><ul>{items.map(([id,label],i)=><li key={id} style={{'--i':i}}>
         <button className={'nav-leaf'+(page===id?' selected':'')} aria-current={page===id?'page':undefined} onClick={()=>onNavigate(id)}>{page===id&&<span className="nav-pill"/>}<span>{label}</span>{count(id)}</button>
       </li>)}</ul></div>
     </div>;

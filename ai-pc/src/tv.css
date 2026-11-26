@@ -2,8 +2,10 @@
   position: fixed;
   inset: 0;
   z-index: 80;
-  width: 100vw;
-  height: 100dvh;
+  /* Sized by inset alone: 100vw would include a scrollbar and push the board past the screen edge. */
+  width: auto;
+  height: auto;
+  max-width: 100%;
   min-height: 0;
   padding: 12px;
   overflow: hidden;
@@ -98,3 +100,13 @@
 .redesigned-board .shift-group .shift-team-d{--shift-accent:#7b9c9e;--shift-border:#bed2d3;--shift-fill:#f3f8f8;--shift-heading:#e4efef;--shift-ink:#48686a}
 .redesigned-board .shift-group .board-team-strip{background:var(--shift-heading);color:var(--shift-ink);box-shadow:inset 3px 0 var(--shift-accent),inset 0 -1px var(--shift-border)}
 .redesigned-board .shift-group{border-bottom-color:#c8cfd9}
+
+/* While TV mode is on, the page behind the board cannot scroll or show scrollbars. */
+html.tv-locked, html.tv-locked body { overflow: hidden; overscroll-behavior: none; scrollbar-gutter: auto; }
+.tv-resume { position: absolute; left: 50%; bottom: 18px; z-index: 5; margin: 0; padding: 8px 16px; border-radius: 999px; background: oklch(0.23 0.012 260 / .86); color: #fff; font-size: 13px; font-weight: 600; transform: translateX(-50%); pointer-events: none; animation: tv-resume-fade 20s ease-out forwards; }
+@keyframes tv-resume-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tv-resume { animation: none; } }
+/* .page carries a view-transition-name and a filled fade-in animation; each makes it its own stacking context.
+   Outside real full screen (after any reload) that traps the board under the sticky top bar and tab bar,
+   so TV mode drops both. */
+html.tv-locked .page, .page:has(> .tv-mode) { view-transition-name: none; animation: none; }
