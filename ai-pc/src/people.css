@@ -175,7 +175,7 @@
 
 /* ---------- Sidebar dropdowns: pages arrive one after another as a section opens ---------- */
 .nav-sub li{opacity:0;transform:translateY(-6px);transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-3) var(--ease-out)}
-.nav-group.is-open>.nav-sub li{opacity:1;transform:none;transition-delay:calc(60ms + var(--i,0) * 45ms)}
+.nav-group.is-open>.nav-sub li{opacity:1;transform:none;transition-delay:calc(30ms + var(--i,0) * 25ms)}
 @media(prefers-reduced-motion:reduce){.nav-sub li{opacity:1;transform:none;transition:none}}
 
 /* Live board: the header keeps what the TV shows; its buttons sit in one group that steps back on the TV. */

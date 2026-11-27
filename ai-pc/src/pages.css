@@ -80,12 +80,12 @@
 .tabbar button.selected::before{content:none}
 .page{view-transition-name:page}
 .modal{view-transition-name:dialog}
-::view-transition-group(*){animation-duration:.34s;animation-timing-function:cubic-bezier(.16,1,.3,1)}
-::view-transition-old(root),::view-transition-new(root){animation-duration:.2s;animation-timing-function:ease-out}
-::view-transition-old(page){animation:vt-out .16s ease-out both}
-::view-transition-new(page){animation:vt-in .34s cubic-bezier(.16,1,.3,1) both}
-::view-transition-old(dialog){animation:vt-out .16s ease-out both}
-::view-transition-new(dialog){animation:vt-pop .32s cubic-bezier(.16,1,.3,1) both}
+::view-transition-group(*){animation-duration:.2s;animation-timing-function:cubic-bezier(.16,1,.3,1)}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.12s;animation-timing-function:ease-out}
+::view-transition-old(page){animation:vt-out .1s ease-out both}
+::view-transition-new(page){animation:vt-in .2s cubic-bezier(.16,1,.3,1) both}
+::view-transition-old(dialog){animation:vt-out .1s ease-out both}
+::view-transition-new(dialog){animation:vt-pop .2s cubic-bezier(.16,1,.3,1) both}
 @keyframes vt-out{to{opacity:0;filter:blur(6px);transform:translateY(-6px)}}
 @keyframes vt-in{from{opacity:0;filter:blur(8px);transform:translateY(12px)}}
 @keyframes vt-pop{from{opacity:0;filter:blur(8px);transform:translateY(14px) scale(.97)}}
